@@ -267,6 +267,31 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+type ExportEntry struct {
+	Pubkey string  `json:"pubkey"`
+	Rank   int     `json:"rank"`
+	Raw    float64 `json:"raw"`
+}
+
+func handleExport(w http.ResponseWriter, r *http.Request) {
+	stats := graph.Stats()
+	if stats.Nodes == 0 {
+		http.Error(w, `{"error":"graph not built yet"}`, http.StatusServiceUnavailable)
+		return
+	}
+	entries := graph.TopN(0) // 0 = all
+	result := make([]ExportEntry, len(entries))
+	for i, e := range entries {
+		result[i] = ExportEntry{
+			Pubkey: e.Pubkey,
+			Rank:   normalizeScore(e.Score, stats.Nodes),
+			Raw:    e.Score,
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // getNsec reads the nsec from env or 1Password
 func getNsec() (string, error) {
 	if nsec := os.Getenv("NOSTR_NSEC"); nsec != "" {
@@ -420,6 +445,7 @@ func main() {
 	http.HandleFunc("/score", handleScore)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
+	http.HandleFunc("/export", handleExport)
 	http.HandleFunc("/publish", handlePublish)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
