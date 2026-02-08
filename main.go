@@ -147,6 +147,7 @@ type GraphStats struct {
 }
 
 var graph = NewGraph()
+var meta = NewMetaStore()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
 	pool := nostr.NewSimplePool(ctx)
@@ -335,19 +336,30 @@ func publishNIP85(ctx context.Context, topN int) (int, error) {
 
 	for i, entry := range entries {
 		rankScore := normalizeScore(entry.Score, stats.Nodes)
+		m := meta.Get(entry.Pubkey)
+
+		tags := nostr.Tags{
+			{"d", entry.Pubkey},
+			{"p", entry.Pubkey},
+			{"rank", fmt.Sprintf("%d", rankScore)},
+			{"followers", fmt.Sprintf("%d", m.Followers)},
+			{"post_cnt", fmt.Sprintf("%d", m.PostCount)},
+			{"reply_cnt", fmt.Sprintf("%d", m.ReplyCount)},
+			{"reactions_cnt", fmt.Sprintf("%d", m.ReactionsRecd)},
+			{"zap_amt_recd", fmt.Sprintf("%d", m.ZapAmtRecd)},
+			{"zap_cnt_recd", fmt.Sprintf("%d", m.ZapCntRecd)},
+			{"zap_amt_sent", fmt.Sprintf("%d", m.ZapAmtSent)},
+			{"zap_cnt_sent", fmt.Sprintf("%d", m.ZapCntSent)},
+		}
+		if m.FirstCreated > 0 {
+			tags = append(tags, nostr.Tag{"first_created_at", fmt.Sprintf("%d", m.FirstCreated)})
+		}
 
 		ev := nostr.Event{
 			PubKey:    pub,
 			CreatedAt: nostr.Now(),
 			Kind:      30382,
-			Tags: nostr.Tags{
-				{"d", entry.Pubkey},
-				{"rank", fmt.Sprintf("%d", rankScore)},
-				{"pagerank_raw", fmt.Sprintf("%.10f", entry.Score)},
-				{"algorithm", "pagerank"},
-				{"graph_nodes", fmt.Sprintf("%d", stats.Nodes)},
-				{"graph_edges", fmt.Sprintf("%d", stats.Edges)},
-			},
+			Tags:      tags,
 		}
 
 		err := ev.Sign(sk)
@@ -415,6 +427,39 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleMetadata(w http.ResponseWriter, r *http.Request) {
+	pubkey := r.URL.Query().Get("pubkey")
+	if pubkey == "" {
+		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	m := meta.Get(pubkey)
+	score, found := graph.GetScore(pubkey)
+	stats := graph.Stats()
+
+	resp := map[string]interface{}{
+		"pubkey":        pubkey,
+		"found":         found,
+		"rank":          normalizeScore(score, stats.Nodes),
+		"raw_score":     score,
+		"followers":     m.Followers,
+		"post_cnt":      m.PostCount,
+		"reply_cnt":     m.ReplyCount,
+		"reactions_cnt": m.ReactionsRecd,
+		"zap_amt_recd":  m.ZapAmtRecd,
+		"zap_cnt_recd":  m.ZapCntRecd,
+		"zap_amt_sent":  m.ZapAmtSent,
+		"zap_cnt_sent":  m.ZapCntSent,
+	}
+	if m.FirstCreated > 0 {
+		resp["first_created_at"] = m.FirstCreated
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -440,6 +485,16 @@ func main() {
 		graph.ComputePageRank(20, 0.85)
 		stats := graph.Stats()
 		log.Printf("WoT graph ready: %d nodes, %d edges", stats.Nodes, stats.Edges)
+
+		// Populate follower counts from graph
+		meta.CountFollowers(graph)
+		log.Printf("Follower counts populated")
+
+		// Crawl metadata (notes, reactions, zaps) for top-scored pubkeys
+		topPubkeys := TopNPubkeys(graph, 500)
+		log.Printf("Crawling metadata for top %d pubkeys...", len(topPubkeys))
+		meta.CrawlMetadata(ctx, topPubkeys)
+		log.Printf("Metadata crawl complete")
 	}()
 
 	http.HandleFunc("/score", handleScore)
@@ -447,6 +502,7 @@ func main() {
 	http.HandleFunc("/stats", handleStats)
 	http.HandleFunc("/export", handleExport)
 	http.HandleFunc("/publish", handlePublish)
+	http.HandleFunc("/metadata", handleMetadata)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -455,10 +511,14 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
 			"name":        "WoT Scoring Service",
-			"description": "Web of Trust scoring for Nostr pubkeys using PageRank over the follow graph",
-			"endpoints": `/score?pubkey=<hex> — Get trust score for a pubkey
+			"description": "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with full metadata collection.",
+			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey
+/metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /top — Top 50 scored pubkeys
-/stats — Service stats and graph info`,
+/export — All scores as JSON
+/stats — Service stats and graph info
+POST /publish — Publish NIP-85 kind 30382 events to relays`,
+			"nip":      "85",
 			"operator": "max@klabo.world",
 			"source":   "https://github.com/joelklabo/wot-scoring",
 		})
