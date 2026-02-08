@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
-NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey and per-event engagement metadata, and publishes kind 30382/30383/30384 events to relays. Auto re-crawls every 6 hours.
+NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, and publishes kind 30382/30383/30384/30385 events to relays. Auto re-crawls every 6 hours.
 
 ## What it does
 
@@ -12,8 +12,9 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 4. Crawls kind 1 (notes), kind 7 (reactions), and kind 9735 (zap receipts) for user metadata
 5. Crawls event engagement (comments, reposts, reactions, zaps) for kind 30383/30384
 6. Crawls addressable events (kind 30023 long-form, kind 30311 live activities) for kind 30384
-7. Serves scores and metadata via HTTP API
-8. Publishes all three NIP-85 assertion kinds to Nostr relays
+7. Crawls external identifiers — hashtags (t-tags) and URLs (r-tags) — for kind 30385
+8. Serves scores and metadata via HTTP API
+9. Publishes all four NIP-85 assertion kinds to Nostr relays
 9. Re-crawls automatically every 6 hours
 
 ## API
@@ -24,10 +25,12 @@ GET /health                  — Health check (status, graph size, uptime)
 GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382)
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
+GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
+GET /external                — Top 50 external identifiers (hashtags, URLs)
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
 GET /stats                   — Service stats and graph info
-POST /publish                — Publish NIP-85 kind 30382/30383/30384 + NIP-89 handler to relays
+POST /publish                — Publish NIP-85 kind 30382/30383/30384/30385 + NIP-89 handler to relays
 ```
 
 ## Run
@@ -118,9 +121,25 @@ Each kind 30384 event scores an addressable event (articles, live activities):
 | `zap_count` | Number of zaps received |
 | `zap_amount` | Sats received via zaps |
 
+## Kind 30385 Tags (External Identifier Assertions)
+
+Each kind 30385 event scores an external identifier (NIP-73 format — hashtags, URLs):
+
+| Tag | Description |
+|-----|-------------|
+| `d` | NIP-73 identifier (e.g. `#bitcoin`, `https://example.com`) |
+| `rank` | Engagement score (0-100) |
+| `mentions` | Number of events referencing this identifier |
+| `unique_authors` | Number of distinct authors who mentioned it |
+| `reactions` | Aggregate reaction count |
+| `reposts` | Aggregate repost count |
+| `comments` | Aggregate reply count |
+| `zap_count` | Number of zaps on mentioning events |
+| `zap_amount` | Sats zapped on mentioning events |
+
 ## NIP-89 Handler Announcement
 
-On publish, the service also emits a kind 31990 event (NIP-89 Recommended Application Handler) announcing support for kinds 30382, 30383, and 30384. This lets Nostr clients auto-discover the service as a NIP-85 assertion provider.
+On publish, the service also emits a kind 31990 event (NIP-89 Recommended Application Handler) announcing support for kinds 30382, 30383, 30384, and 30385. This lets Nostr clients auto-discover the service as a NIP-85 assertion provider.
 
 ## Built for
 

@@ -8,7 +8,7 @@ NIP-85 defines a standard for trust attestations — three kinds of events that 
 
 ## What This Tool Does
 
-WoT Scoring implements all three NIP-85 assertion kinds:
+WoT Scoring implements all four NIP-85 assertion kinds:
 
 **Kind 30382 — User Assertions.** Crawls the Nostr follow graph (kind 3 events) from public relays, builds a directed graph, computes PageRank, and publishes per-pubkey trust scores. Each event includes 12 tags: normalized rank (0-100), follower count, post count, reply count, reactions received, zap amounts sent/received, zap counts sent/received, and the earliest known event timestamp.
 
@@ -16,7 +16,9 @@ WoT Scoring implements all three NIP-85 assertion kinds:
 
 **Kind 30384 — Addressable Event Assertions.** Same engagement scoring applied to long-form articles (kind 30023) and live activities (kind 30311). Enables clients to rank articles and streams by community engagement.
 
-The result: any Nostr client can look up trust scores for pubkeys, events, and articles by querying NIP-85 events from a known scoring service, without running the computation locally.
+**Kind 30385 — External Identifier Assertions (NIP-73).** Crawls hashtags (from t-tags) and URLs (from r-tags) shared by high-WoT pubkeys and scores them by aggregate engagement. Publishes per-identifier scores with metrics like mention count, unique author count, reactions, reposts, comments, and zap amounts. This lets clients surface trending topics and high-quality external resources as ranked by the trust graph.
+
+The result: any Nostr client can look up trust scores for pubkeys, events, articles, and external content by querying NIP-85 events from a known scoring service, without running the computation locally.
 
 ## Scale
 
@@ -26,7 +28,7 @@ The top-scored accounts match intuition: jack dorsey, jb55, pablo, and other wel
 
 ## Why It Matters
 
-1. **Complete NIP-85 implementation.** This is the only project we're aware of that publishes all three NIP-85 assertion kinds (30382, 30383, 30384). NIP-85 was merged as PR #1534 on January 22, 2026 — this implementation is already compliant with the merged spec.
+1. **Complete NIP-85 implementation.** This is the only project we're aware of that publishes all four NIP-85 assertion kinds (30382, 30383, 30384, 30385). NIP-85 was merged as PR #1534 on January 22, 2026 — this implementation is already compliant with the full merged spec, including NIP-73 external identifier support.
 
 2. **Spam filtering gets better with shared trust data.** A client that checks NIP-85 attestations before rendering a note can silently deprioritize unknown/untrusted pubkeys without maintaining its own follow-graph crawler.
 

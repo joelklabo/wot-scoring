@@ -149,6 +149,7 @@ type GraphStats struct {
 var graph = NewGraph()
 var meta = NewMetaStore()
 var events = NewEventStore()
+var external = NewExternalStore()
 var startTime = time.Now()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
@@ -422,6 +423,7 @@ func publishNIP89Handler(ctx context.Context, sk, pub string) error {
 			{"k", "30382"},
 			{"k", "30383"},
 			{"k", "30384"},
+			{"k", "30385"},
 			{"web", "https://github.com/joelklabo/wot-scoring"},
 		},
 	}
@@ -489,6 +491,12 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error publishing kind 30384: %v", err)
 	}
 
+	// Publish kind 30385 (external identifier assertions)
+	count385, err := publishExternalAssertions(ctx, external, sk, pub)
+	if err != nil {
+		log.Printf("Error publishing kind 30385: %v", err)
+	}
+
 	// Publish NIP-89 handler announcement (kind 31990)
 	nip89Err := publishNIP89Handler(ctx, sk, pub)
 	nip89Status := "published"
@@ -501,8 +509,9 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 		"kind_30382":  count382,
 		"kind_30383":  count383,
 		"kind_30384":  count384,
+		"kind_30385":  count385,
 		"kind_31990":  nip89Status,
-		"total":       count382 + count383 + count384,
+		"total":       count382 + count383 + count384 + count385,
 		"algorithm":   "pagerank + engagement",
 		"graph_nodes": stats.Nodes,
 		"graph_edges": stats.Edges,
@@ -553,6 +562,73 @@ func handleEventScore(w http.ResponseWriter, r *http.Request) {
 		"reactions": m.Reactions,
 		"zap_count": m.ZapCount,
 		"zap_amount": m.ZapAmount,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func handleExternal(w http.ResponseWriter, r *http.Request) {
+	identifier := r.URL.Query().Get("id")
+	if identifier == "" {
+		// Return top external identifiers
+		topExternal := external.TopExternal(50)
+		var maxEng int64
+		if len(topExternal) > 0 {
+			maxEng = externalEngagement(topExternal[0])
+		}
+
+		type entry struct {
+			Identifier    string `json:"identifier"`
+			Kind          string `json:"kind"`
+			Rank          int    `json:"rank"`
+			Mentions      int    `json:"mentions"`
+			UniqueAuthors int    `json:"unique_authors"`
+			Reactions     int    `json:"reactions"`
+			Reposts       int    `json:"reposts"`
+			Comments      int    `json:"comments"`
+			ZapCount      int    `json:"zap_count"`
+			ZapAmount     int64  `json:"zap_amount"`
+		}
+		result := make([]entry, len(topExternal))
+		for i, m := range topExternal {
+			result[i] = entry{
+				Identifier:    m.Identifier,
+				Kind:          m.Kind,
+				Rank:          externalRank(m, maxEng),
+				Mentions:      m.Mentions,
+				UniqueAuthors: len(m.Authors),
+				Reactions:     m.Reactions,
+				Reposts:       m.Reposts,
+				Comments:      m.Comments,
+				ZapCount:      m.ZapCount,
+				ZapAmount:     m.ZapAmount,
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	m := external.Get(identifier)
+	topExternal := external.TopExternal(1)
+	var maxEng int64
+	if len(topExternal) > 0 {
+		maxEng = externalEngagement(topExternal[0])
+	}
+
+	resp := map[string]interface{}{
+		"identifier":     identifier,
+		"kind":           m.Kind,
+		"rank":           externalRank(m, maxEng),
+		"mentions":       m.Mentions,
+		"unique_authors": len(m.Authors),
+		"reactions":      m.Reactions,
+		"reposts":        m.Reposts,
+		"comments":       m.Comments,
+		"zap_count":      m.ZapCount,
+		"zap_amount":     m.ZapAmount,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -634,6 +710,11 @@ func main() {
 		log.Printf("Event engagement crawl complete: %d events, %d addressable",
 			events.EventCount(), events.AddressableCount())
 
+		// Crawl external identifiers (hashtags, URLs) for NIP-85 kind 30385
+		log.Printf("Crawling external identifiers for top %d pubkeys...", len(topPubkeys))
+		external.CrawlExternalIdentifiers(ctx, topPubkeys)
+		log.Printf("External identifier crawl complete: %d identifiers", external.Count())
+
 		// Schedule periodic re-crawl every 6 hours
 		go func() {
 			ticker := time.NewTicker(6 * time.Hour)
@@ -646,9 +727,10 @@ func main() {
 				topPubkeys := TopNPubkeys(graph, 500)
 				meta.CrawlMetadata(ctx, topPubkeys)
 				events.CrawlEventEngagement(ctx, topPubkeys)
+				external.CrawlExternalIdentifiers(ctx, topPubkeys)
 				stats := graph.Stats()
-				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable",
-					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount())
+				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external",
+					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count())
 			}
 		}()
 	}()
@@ -666,6 +748,7 @@ func main() {
 			"graph_edges": stats.Edges,
 			"events":      events.EventCount(),
 			"addressable": events.AddressableCount(),
+			"external":    external.Count(),
 			"uptime":      time.Since(startTime).String(),
 		})
 	})
@@ -676,6 +759,7 @@ func main() {
 	http.HandleFunc("/publish", handlePublish)
 	http.HandleFunc("/metadata", handleMetadata)
 	http.HandleFunc("/event", handleEventScore)
+	http.HandleFunc("/external", handleExternal)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -688,10 +772,12 @@ func main() {
 			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382)
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
+/external?id=<identifier> — External identifier score (kind 30385, NIP-73)
+/external — Top 50 external identifiers (hashtags, URLs)
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
 /stats — Service stats and graph info
-POST /publish — Publish NIP-85 kind 30382/30383/30384 events to relays`,
+POST /publish — Publish NIP-85 kind 30382/30383/30384/30385 events to relays`,
 			"nip":      "85",
 			"operator": "max@klabo.world",
 			"source":   "https://github.com/joelklabo/wot-scoring",
