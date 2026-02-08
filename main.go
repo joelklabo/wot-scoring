@@ -520,6 +520,57 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// autoPublish runs a full NIP-85 publish cycle (all four assertion kinds + NIP-89).
+// Called after initial crawl and after each scheduled re-crawl.
+func autoPublish(ctx context.Context) {
+	stats := graph.Stats()
+	if stats.Nodes == 0 {
+		log.Printf("Auto-publish skipped: graph not built yet")
+		return
+	}
+
+	nsec, err := getNsec()
+	if err != nil {
+		log.Printf("Auto-publish skipped: %v", err)
+		return
+	}
+	sk, pub, err := decodeKey(nsec)
+	if err != nil {
+		log.Printf("Auto-publish skipped: %v", err)
+		return
+	}
+
+	log.Printf("Auto-publish starting (graph: %d nodes, %d edges)...", stats.Nodes, stats.Edges)
+
+	count382, err := publishNIP85(ctx, 50)
+	if err != nil {
+		log.Printf("Auto-publish kind 30382 error: %v", err)
+	}
+
+	count383, err := publishEventAssertions(ctx, events, sk, pub)
+	if err != nil {
+		log.Printf("Auto-publish kind 30383 error: %v", err)
+	}
+
+	count384, err := publishAddressableAssertions(ctx, events, sk, pub)
+	if err != nil {
+		log.Printf("Auto-publish kind 30384 error: %v", err)
+	}
+
+	count385, err := publishExternalAssertions(ctx, external, sk, pub)
+	if err != nil {
+		log.Printf("Auto-publish kind 30385 error: %v", err)
+	}
+
+	nip89Err := publishNIP89Handler(ctx, sk, pub)
+	if nip89Err != nil {
+		log.Printf("Auto-publish NIP-89 error: %v", nip89Err)
+	}
+
+	log.Printf("Auto-publish complete: 30382=%d, 30383=%d, 30384=%d, 30385=%d (total=%d)",
+		count382, count383, count384, count385, count382+count383+count384+count385)
+}
+
 // decodeKey converts an nsec (or raw hex) into sk and pubkey.
 func decodeKey(nsec string) (string, string, error) {
 	var sk string
@@ -668,6 +719,20 @@ func handleMetadata(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// corsMiddleware adds CORS headers so web apps can query the API directly.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -715,7 +780,10 @@ func main() {
 		external.CrawlExternalIdentifiers(ctx, topPubkeys)
 		log.Printf("External identifier crawl complete: %d identifiers", external.Count())
 
-		// Schedule periodic re-crawl every 6 hours
+		// Auto-publish NIP-85 events after initial crawl
+		autoPublish(ctx)
+
+		// Schedule periodic re-crawl + auto-publish every 6 hours
 		go func() {
 			ticker := time.NewTicker(6 * time.Hour)
 			defer ticker.Stop()
@@ -731,6 +799,8 @@ func main() {
 				stats := graph.Stats()
 				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external",
 					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count())
+
+				autoPublish(ctx)
 			}
 		}()
 	}()
@@ -785,5 +855,5 @@ POST /publish — Publish NIP-85 kind 30382/30383/30384/30385 events to relays`,
 	})
 
 	log.Printf("WoT Scoring API listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(http.DefaultServeMux)))
 }
