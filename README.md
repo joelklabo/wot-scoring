@@ -20,13 +20,14 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 
 ```
 GET /                        — Service info and endpoint list
+GET /health                  — Health check (status, graph size, uptime)
 GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382)
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
 GET /stats                   — Service stats and graph info
-POST /publish                — Publish NIP-85 kind 30382/30383/30384 events to relays
+POST /publish                — Publish NIP-85 kind 30382/30383/30384 + NIP-89 handler to relays
 ```
 
 ## Run
@@ -105,6 +106,10 @@ Each kind 30384 event scores an addressable event (articles, live activities):
 | `reactions` | Reaction count |
 | `zap_count` | Number of zaps received |
 | `zap_amount` | Sats received via zaps |
+
+## NIP-89 Handler Announcement
+
+On publish, the service also emits a kind 31990 event (NIP-89 Recommended Application Handler) announcing support for kinds 30382, 30383, and 30384. This lets Nostr clients auto-discover the service as a NIP-85 assertion provider.
 
 ## Built for
 

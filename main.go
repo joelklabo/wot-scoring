@@ -149,6 +149,7 @@ type GraphStats struct {
 var graph = NewGraph()
 var meta = NewMetaStore()
 var events = NewEventStore()
+var startTime = time.Now()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
 	pool := nostr.NewSimplePool(ctx)
@@ -396,6 +397,54 @@ func publishNIP85(ctx context.Context, topN int) (int, error) {
 	return published, nil
 }
 
+// publishNIP89Handler publishes a kind 31990 event announcing this service
+// as a NIP-85 assertion provider (NIP-89 Recommended Application Handlers).
+func publishNIP89Handler(ctx context.Context, sk, pub string) error {
+	pool := nostr.NewSimplePool(ctx)
+
+	// Content is kind-0-style metadata about the service
+	content, _ := json.Marshal(map[string]string{
+		"name":        "WoT Scoring Service",
+		"about":       "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with engagement metrics.",
+		"picture":     "",
+		"nip05":       "max@klabo.world",
+		"website":     "https://github.com/joelklabo/wot-scoring",
+		"lud16":       "max@klabo.world",
+	})
+
+	ev := nostr.Event{
+		PubKey:    pub,
+		CreatedAt: nostr.Now(),
+		Kind:      31990,
+		Content:   string(content),
+		Tags: nostr.Tags{
+			{"d", "wot-scoring-nip85"},
+			{"k", "30382"},
+			{"k", "30383"},
+			{"k", "30384"},
+			{"web", "https://github.com/joelklabo/wot-scoring"},
+		},
+	}
+
+	if err := ev.Sign(sk); err != nil {
+		return fmt.Errorf("sign kind 31990: %w", err)
+	}
+
+	published := false
+	for result := range pool.PublishMany(ctx, relays, ev) {
+		if result.Error != nil {
+			log.Printf("NIP-89 publish to %s failed: %v", result.RelayURL, result.Error)
+		} else {
+			published = true
+			log.Printf("NIP-89 handler published to %s", result.RelayURL)
+		}
+	}
+	if !published {
+		return fmt.Errorf("failed to publish NIP-89 handler to any relay")
+	}
+	return nil
+}
+
 func handlePublish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
@@ -440,17 +489,25 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error publishing kind 30384: %v", err)
 	}
 
+	// Publish NIP-89 handler announcement (kind 31990)
+	nip89Err := publishNIP89Handler(ctx, sk, pub)
+	nip89Status := "published"
+	if nip89Err != nil {
+		nip89Status = fmt.Sprintf("error: %s", nip89Err.Error())
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"kind_30382": count382,
-		"kind_30383": count383,
-		"kind_30384": count384,
-		"total":      count382 + count383 + count384,
-		"algorithm":  "pagerank + engagement",
+		"kind_30382":  count382,
+		"kind_30383":  count383,
+		"kind_30384":  count384,
+		"kind_31990":  nip89Status,
+		"total":       count382 + count383 + count384,
+		"algorithm":   "pagerank + engagement",
 		"graph_nodes": stats.Nodes,
 		"graph_edges": stats.Edges,
-		"relays":     relays,
-		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"relays":      relays,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
@@ -596,6 +653,22 @@ func main() {
 		}()
 	}()
 
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		stats := graph.Stats()
+		status := "starting"
+		if stats.Nodes > 0 {
+			status = "ready"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":      status,
+			"graph_nodes": stats.Nodes,
+			"graph_edges": stats.Edges,
+			"events":      events.EventCount(),
+			"addressable": events.AddressableCount(),
+			"uptime":      time.Since(startTime).String(),
+		})
+	})
 	http.HandleFunc("/score", handleScore)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
