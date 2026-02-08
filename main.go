@@ -148,6 +148,7 @@ type GraphStats struct {
 
 var graph = NewGraph()
 var meta = NewMetaStore()
+var events = NewEventStore()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
 	pool := nostr.NewSimplePool(ctx)
@@ -407,24 +408,98 @@ func handlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topN := 50 // publish top 50 scores (rate-limited by relays)
-	ctx := r.Context()
-	count, err := publishNIP85(ctx, topN)
+	nsec, err := getNsec()
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	sk, pub, err := decodeKey(nsec)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
+	ctx := r.Context()
+
+	// Publish kind 30382 (user assertions)
+	count382, err := publishNIP85(ctx, 50)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"30382: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Publish kind 30383 (event assertions)
+	count383, err := publishEventAssertions(ctx, events, sk, pub)
+	if err != nil {
+		log.Printf("Error publishing kind 30383: %v", err)
+	}
+
+	// Publish kind 30384 (addressable event assertions)
+	count384, err := publishAddressableAssertions(ctx, events, sk, pub)
+	if err != nil {
+		log.Printf("Error publishing kind 30384: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"published":     count,
-		"kind":          30382,
-		"algorithm":     "pagerank",
-		"graph_nodes":   stats.Nodes,
-		"graph_edges":   stats.Edges,
-		"relays":        relays,
-		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+		"kind_30382": count382,
+		"kind_30383": count383,
+		"kind_30384": count384,
+		"total":      count382 + count383 + count384,
+		"algorithm":  "pagerank + engagement",
+		"graph_nodes": stats.Nodes,
+		"graph_edges": stats.Edges,
+		"relays":     relays,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+// decodeKey converts an nsec (or raw hex) into sk and pubkey.
+func decodeKey(nsec string) (string, string, error) {
+	var sk string
+	if strings.HasPrefix(nsec, "nsec") {
+		_, v, err := nip19.Decode(nsec)
+		if err != nil {
+			return "", "", fmt.Errorf("nip19 decode: %w", err)
+		}
+		sk = v.(string)
+	} else {
+		sk = nsec
+	}
+	pub, err := nostr.GetPublicKey(sk)
+	if err != nil {
+		return "", "", fmt.Errorf("getPublicKey: %w", err)
+	}
+	return sk, pub, nil
+}
+
+func handleEventScore(w http.ResponseWriter, r *http.Request) {
+	eventID := r.URL.Query().Get("id")
+	if eventID == "" {
+		http.Error(w, `{"error":"id parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	m := events.GetEvent(eventID)
+
+	topEvents := events.TopEvents(1)
+	var maxEng int64
+	if len(topEvents) > 0 {
+		maxEng = eventEngagement(topEvents[0])
+	}
+
+	resp := map[string]interface{}{
+		"event_id":  eventID,
+		"rank":      eventRank(m, maxEng),
+		"comments":  m.Comments,
+		"reposts":   m.Reposts,
+		"reactions": m.Reactions,
+		"zap_count": m.ZapCount,
+		"zap_amount": m.ZapAmount,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func handleMetadata(w http.ResponseWriter, r *http.Request) {
@@ -495,6 +570,30 @@ func main() {
 		log.Printf("Crawling metadata for top %d pubkeys...", len(topPubkeys))
 		meta.CrawlMetadata(ctx, topPubkeys)
 		log.Printf("Metadata crawl complete")
+
+		// Crawl event engagement for NIP-85 kind 30383/30384
+		log.Printf("Crawling event engagement for top %d pubkeys...", len(topPubkeys))
+		events.CrawlEventEngagement(ctx, topPubkeys)
+		log.Printf("Event engagement crawl complete: %d events, %d addressable",
+			events.EventCount(), events.AddressableCount())
+
+		// Schedule periodic re-crawl every 6 hours
+		go func() {
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				log.Printf("Starting scheduled re-crawl...")
+				crawlFollows(ctx, seeds, depth)
+				graph.ComputePageRank(20, 0.85)
+				meta.CountFollowers(graph)
+				topPubkeys := TopNPubkeys(graph, 500)
+				meta.CrawlMetadata(ctx, topPubkeys)
+				events.CrawlEventEngagement(ctx, topPubkeys)
+				stats := graph.Stats()
+				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable",
+					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount())
+			}
+		}()
 	}()
 
 	http.HandleFunc("/score", handleScore)
@@ -503,6 +602,7 @@ func main() {
 	http.HandleFunc("/export", handleExport)
 	http.HandleFunc("/publish", handlePublish)
 	http.HandleFunc("/metadata", handleMetadata)
+	http.HandleFunc("/event", handleEventScore)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -512,12 +612,13 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{
 			"name":        "WoT Scoring Service",
 			"description": "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with full metadata collection.",
-			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey
+			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382)
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
+/event?id=<hex> — Event engagement score (kind 30383)
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
 /stats — Service stats and graph info
-POST /publish — Publish NIP-85 kind 30382 events to relays`,
+POST /publish — Publish NIP-85 kind 30382/30383/30384 events to relays`,
 			"nip":      "85",
 			"operator": "max@klabo.world",
 			"source":   "https://github.com/joelklabo/wot-scoring",
