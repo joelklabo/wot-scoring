@@ -46,6 +46,17 @@ docker build -t wot-scoring .
 docker run -p 8090:8090 -e NOSTR_NSEC=nsec1... wot-scoring
 ```
 
+Systemd (persistent service):
+
+```bash
+sudo cp wot-scoring /usr/local/bin/
+sudo cp wot-scoring.service /etc/systemd/system/
+sudo mkdir -p /etc/wot-scoring
+echo "NOSTR_NSEC=nsec1..." | sudo tee /etc/wot-scoring/env
+sudo useradd -r -s /usr/sbin/nologin wot
+sudo systemctl enable --now wot-scoring
+```
+
 ## Test
 
 ```bash

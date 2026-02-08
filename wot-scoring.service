@@ -1,0 +1,22 @@
+[Unit]
+Description=WoT Scoring NIP-85 Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wot
+ExecStart=/usr/local/bin/wot-scoring
+Restart=always
+RestartSec=10
+Environment=PORT=8090
+EnvironmentFile=-/etc/wot-scoring/env
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
