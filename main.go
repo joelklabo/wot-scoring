@@ -1903,6 +1903,7 @@ footer a:hover{text-decoration:underline}
 <div class="tab active" data-tab="lookup">Score Lookup</div>
 <div class="tab" data-tab="compare">Compare</div>
 <div class="tab" data-tab="path">Trust Path</div>
+<div class="tab" data-tab="nip05">NIP-05 Verify</div>
 </div>
 
 <div class="tab-content active" id="tab-lookup">
@@ -1931,6 +1932,14 @@ footer a:hover{text-decoration:underline}
 </div>
 <button class="path-btn" id="path-btn" onclick="findPath()">Find Trust Path</button>
 <div id="path-result"></div>
+</div>
+
+<div class="tab-content" id="tab-nip05">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Verify a NIP-05 identity and see their Web of Trust profile</p>
+<div class="search">
+<input type="text" id="nip05-input" placeholder="Enter NIP-05 identifier (e.g. user@domain.com)...">
+<div id="nip05-result"></div>
+</div>
 </div>
 
 <div class="leaderboard">
@@ -1979,6 +1988,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/health</span><span class="desc">— Health check</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/nip05?id=user@domain</span><span class="desc">— NIP-05 verification + WoT trust profile</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 </div>
 
@@ -2156,6 +2166,36 @@ html+='</div>'});
 html+='</div>';
 el.innerHTML=html;
 }).catch(()=>{document.getElementById("communities-list").innerHTML='<div style="color:#555">Failed to load communities</div>'});
+
+// NIP-05 lookup
+const nip05Input=document.getElementById("nip05-input"),nip05Result=document.getElementById("nip05-result");
+let nip05Timer;
+nip05Input.addEventListener("input",()=>{clearTimeout(nip05Timer);const v=nip05Input.value.trim();if(!v){nip05Result.innerHTML="";return}
+if(!v.includes("@")){nip05Result.innerHTML='<div style="color:#888;margin-top:.5rem;font-size:.9rem">Enter a NIP-05 identifier like user@domain.com</div>';return}
+nip05Timer=setTimeout(()=>{
+nip05Result.innerHTML='<div style="color:#555;margin-top:.5rem">Resolving NIP-05...</div>';
+fetch("/nip05?id="+encodeURIComponent(v)).then(r=>r.json()).then(d=>{
+if(d.error){err(nip05Result,d.error);return}
+const levelColors={"highly_trusted":"#10b981","trusted":"#3b82f6","moderate":"#f59e0b","low":"#f97316","untrusted":"#ef4444","unknown":"#666"};
+const lc=levelColors[d.trust_level]||"#666";
+let html='<div class="score-card fade-in">';
+html+='<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">';
+html+='<div class="score-big">'+d.score+'/100</div>';
+html+='<span style="background:'+lc+'22;color:'+lc+';padding:.25rem .75rem;border-radius:6px;font-size:.95rem;font-weight:600;border:1px solid '+lc+'44">'+d.trust_level.replace("_"," ")+'</span>';
+html+='</div>';
+html+='<div style="color:#10b981;margin-top:.5rem;font-size:.9rem">&#10003; Verified: '+d.nip05+'</div>';
+html+='<div style="color:#888;margin-top:.25rem;font-family:monospace;font-size:.85rem">'+d.pubkey+'</div>';
+html+='<div class="score-details">';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.followers||0)+'</div><div class="score-detail-label">Followers</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.post_count||0)+'</div><div class="score-detail-label">Posts</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reactions||0)+'</div><div class="score-detail-label">Reactions</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reply_count||0)+'</div><div class="score-detail-label">Replies</div></div>';
+html+='</div>';
+if(d.topics&&d.topics.length){html+='<div style="margin-top:.75rem"><span style="color:#888;font-size:.85rem">Topics: </span>';d.topics.forEach(t=>{html+='<span style="background:#1a1a2e;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:.8rem;margin:2px">'+t+'</span>'});html+='</div>'}
+if(d.nip05_relays&&d.nip05_relays.length){html+='<div style="margin-top:.5rem;font-size:.85rem;color:#888">Relays: '+d.nip05_relays.join(", ")+'</div>'}
+html+='</div>';
+nip05Result.innerHTML=html;
+}).catch(()=>{err(nip05Result,"Error resolving NIP-05 identifier")})},600)});
 </script>
 </body>
 </html>`
