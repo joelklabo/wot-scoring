@@ -62,6 +62,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/reputation":    5,
 			"/predict":       3,
 			"/influence":          5,
+			"/influence/batch":    10,
 			"/network-health":     5,
 			"/compare-providers":  5,
 		},

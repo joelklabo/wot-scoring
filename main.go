@@ -2560,6 +2560,51 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<div class="endpoint-card" id="ep-influence-batch">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/influence/batch</span>
+<span class="price-tag">10 sats</span>
+</div>
+<div class="desc">Batch static influence analysis for up to 50 pubkeys. Returns trust score, percentile rank, follower metrics, mutual connections, 2-hop reach estimate, and network role classification (hub, authority, connector, consumer, observer, participant, isolated). No simulation — uses pre-computed PageRank. Results sorted by trust score descending.</div>
+<div class="params">
+<div class="params-title">Request Body (JSON)</div>
+<div class="param"><span class="param-name">pubkeys</span><span class="param-type">string[]</span><span class="param-desc">Array of hex pubkeys or npub identifiers (max 50) <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "results": [
+    {
+      "pubkey": "32e1827635...",
+      "trust_score": 89,
+      "percentile": 0.992,
+      "rank": 42,
+      "followers": 1843,
+      "follows": 312,
+      "avg_follower_quality": 34.7,
+      "mutual_count": 187,
+      "reach_estimate": 28450,
+      "classification": "hub"
+    },
+    {
+      "pubkey": "82341f882b...",
+      "trust_score": 45,
+      "percentile": 0.731,
+      "rank": 13820,
+      "followers": 52,
+      "follows": 89,
+      "avg_follower_quality": 22.1,
+      "mutual_count": 31,
+      "reach_estimate": 1240,
+      "classification": "connector"
+    }
+  ],
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== NETWORK HEALTH ===== -->
 <h2 id="network-health">Network Health</h2>
 <p class="section-intro">Graph topology analysis and overall network health assessment.</p>
@@ -3162,6 +3207,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/sybil?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Sybil resistance scoring (0-100, multi-signal analysis)</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/influence?pubkey=&lt;hex|npub&gt;&amp;other=&lt;hex|npub&gt;</span><span class="desc">— Influence propagation: what-if analysis for follows/unfollows</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/influence/batch</span><span class="desc">— Batch static influence analysis (up to 50 pubkeys, role classification)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/network-health</span><span class="desc">— Network topology health: degree distribution, connectivity, Gini, hubs</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/compare-providers?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Cross-provider WoT score comparison with consensus metrics</span></div>
 <div class="endpoint"><span class="method">WS</span><span class="path">/ws/scores</span><span class="desc">— Real-time score streaming via WebSocket (subscribe to pubkey updates)</span></div>
@@ -3177,7 +3223,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil, /predict</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence, /network-health, /compare-providers</span></div>
-<div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
+<div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch, /influence/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
 </div>
@@ -3735,6 +3781,7 @@ func main() {
 	http.HandleFunc("/reputation", handleReputation)
 	http.HandleFunc("/predict", handlePredict)
 	http.HandleFunc("/influence", handleInfluence)
+	http.HandleFunc("/influence/batch", handleInfluenceBatch)
 	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/compare-providers", handleCompareProviders)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))

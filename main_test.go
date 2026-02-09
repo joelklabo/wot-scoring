@@ -865,7 +865,7 @@ func TestDocsPageContainsAllEndpoints(t *testing.T) {
 		"/nip05", "/nip05/batch", "/nip05/reverse",
 		"/timeline", "/decay", "/decay/top",
 		"/spam", "/spam/batch", "/verify", "/anomalies",
-		"/sybil", "/sybil/batch", "/trust-path", "/reputation", "/predict", "/influence", "/network-health", "/compare-providers", "/ws/scores",
+		"/sybil", "/sybil/batch", "/trust-path", "/reputation", "/predict", "/influence", "/influence/batch", "/network-health", "/compare-providers", "/ws/scores",
 		"/metadata", "/event", "/external",
 		"/top", "/export", "/relay", "/authorized", "/communities",
 		"/publish", "/providers", "/stats", "/health",

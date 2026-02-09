@@ -700,6 +700,39 @@ const openAPISpec = `{
         }
       }
     },
+    "/influence/batch": {
+      "post": {
+        "tags": ["Influence Analysis"],
+        "operationId": "batchInfluenceAnalysis",
+        "summary": "Batch static influence analysis for multiple pubkeys",
+        "description": "Analyzes up to 50 pubkeys in a single request, returning each one's trust score, percentile rank, follower metrics, mutual connections, 2-hop reach estimate, and network role classification (hub, authority, connector, consumer, observer, participant, isolated). Results sorted by trust score descending. No simulation — uses pre-computed PageRank for fast O(1) per-pubkey lookups.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["pubkeys"],
+                "properties": {
+                  "pubkeys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 50,
+                    "description": "Array of hex pubkeys or npub identifiers"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Batch influence results with per-pubkey metrics and role classifications"},
+          "400": {"description": "Invalid JSON, empty pubkeys array, or exceeds 50 limit"},
+          "402": {"description": "L402 payment required (10 sats)"},
+          "405": {"description": "Method not allowed (POST required)"}
+        }
+      }
+    },
     "/network-health": {
       "get": {
         "tags": ["Network Analysis"],
