@@ -679,6 +679,24 @@ const openAPISpec = `{
         }
       }
     },
+    "/influence": {
+      "get": {
+        "tags": ["Influence Analysis"],
+        "operationId": "simulateInfluence",
+        "summary": "Simulate how a follow/unfollow would ripple through PageRank scores",
+        "description": "Performs differential PageRank analysis: computes current scores vs. hypothetical scores after a simulated graph change. Shows which pubkeys would be most affected and by how much. Useful for understanding the cascading impact of a single follow/unfollow on the trust network.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "The pubkey being followed/unfollowed (hex or npub)"},
+          {"name": "other", "in": "query", "required": true, "schema": {"type": "string"}, "description": "The pubkey performing the follow/unfollow action (hex or npub)"},
+          {"name": "action", "in": "query", "required": false, "schema": {"type": "string", "enum": ["follow", "unfollow"], "default": "follow"}, "description": "The simulated action (default: follow)"}
+        ],
+        "responses": {
+          "200": {"description": "Influence propagation analysis with affected pubkeys and score deltas"},
+          "400": {"description": "Missing, invalid, or identical pubkeys, or invalid action"},
+          "402": {"description": "L402 payment required (5 sats)"}
+        }
+      }
+    },
     "/docs": {
       "get": {
         "tags": ["Infrastructure"],

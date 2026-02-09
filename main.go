@@ -192,6 +192,36 @@ func (g *Graph) Stats() GraphStats {
 	}
 }
 
+// ScoresSnapshot returns a copy of all current PageRank scores.
+func (g *Graph) ScoresSnapshot() map[string]float64 {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	snap := make(map[string]float64, len(g.scores))
+	for k, v := range g.scores {
+		snap[k] = v
+	}
+	return snap
+}
+
+// FollowsSnapshot returns deep copies of the follows and followers maps.
+func (g *Graph) FollowsSnapshot() (map[string][]string, map[string][]string) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	f := make(map[string][]string, len(g.follows))
+	for k, vs := range g.follows {
+		cp := make([]string, len(vs))
+		copy(cp, vs)
+		f[k] = cp
+	}
+	fr := make(map[string][]string, len(g.followers))
+	for k, vs := range g.followers {
+		cp := make([]string, len(vs))
+		copy(cp, vs)
+		fr[k] = cp
+	}
+	return f, fr
+}
+
 func countEdges(follows map[string][]string) int {
 	total := 0
 	for _, vs := range follows {
@@ -2485,6 +2515,50 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== INFLUENCE ANALYSIS ===== -->
+<h2 id="influence">Influence Analysis</h2>
+<p class="section-intro">What-if analysis for graph changes. Simulate a follow or unfollow and see how PageRank scores cascade through the network.</p>
+
+<div class="endpoint-card" id="ep-influence">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/influence</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Differential PageRank analysis: simulate a follow/unfollow and see which pubkeys are most affected. Returns the target's score change, the top 20 most-affected pubkeys with their score deltas, and summary metrics including influence radius and classification.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">The pubkey being followed/unfollowed <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">other</span><span class="param-type">string</span><span class="param-desc">The pubkey performing the action <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">action</span><span class="param-type">string</span><span class="param-desc">follow or unfollow (default: follow)</span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "32e1827635...",
+  "action": "follow",
+  "other": "82341f882b...",
+  "current_score": 78,
+  "simulated_score": 79,
+  "score_delta": 1,
+  "affected_count": 4231,
+  "max_delta": 0.000012345,
+  "top_affected": [
+    {"pubkey": "32e1827635...", "current_score": 78, "new_score": 79, "delta": 1, "raw_delta": 0.000012345, "direction": "increase"},
+    {"pubkey": "abc123...", "current_score": 45, "new_score": 44, "delta": -1, "raw_delta": -0.000008765, "direction": "decrease"}
+  ],
+  "summary": {
+    "total_positive": 1200,
+    "total_negative": 3031,
+    "avg_delta": 0.000000543,
+    "influence_radius": "moderate",
+    "classification": "moderate"
+  },
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2964,6 +3038,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/anomalies?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust anomaly detection and risk assessment</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/sybil?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Sybil resistance scoring (0-100, multi-signal analysis)</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/influence?pubkey=&lt;hex|npub&gt;&amp;other=&lt;hex|npub&gt;</span><span class="desc">— Influence propagation: what-if analysis for follows/unfollows</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -2975,7 +3050,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil, /predict</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -3527,6 +3602,7 @@ func main() {
 	http.HandleFunc("/trust-path", handleTrustPath)
 	http.HandleFunc("/reputation", handleReputation)
 	http.HandleFunc("/predict", handlePredict)
+	http.HandleFunc("/influence", handleInfluence)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

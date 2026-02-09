@@ -61,6 +61,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/trust-path":    5,
 			"/reputation":    5,
 			"/predict":       3,
+			"/influence":     5,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),
