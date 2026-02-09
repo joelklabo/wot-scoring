@@ -18,7 +18,7 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 37 endpoints serve live data. 288 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 38 endpoints serve live data. 302 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, multi-hop trust path analysis, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries

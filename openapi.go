@@ -45,7 +45,8 @@ const openAPISpec = `{
     {"name": "Infrastructure", "description": "Health, providers, relay trust, communities, publishing"},
     {"name": "Visualization", "description": "D3.js-compatible graph data and trust comparison"},
     {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"},
-    {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"}
+    {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"},
+    {"name": "Trust Paths", "description": "Multi-hop trust path analysis with scoring and diversity metrics"}
   ],
   "paths": {
     "/score": {
@@ -622,6 +623,24 @@ const openAPISpec = `{
           "400": {"description": "Invalid JSON or missing pubkeys"},
           "402": {"description": "L402 payment required (10 sats)"},
           "405": {"description": "Method not allowed (POST required)"}
+        }
+      }
+    },
+    "/trust-path": {
+      "get": {
+        "tags": ["Trust Paths"],
+        "operationId": "getMultiHopTrustPath",
+        "summary": "Multi-hop trust path analysis between two pubkeys",
+        "description": "Finds and scores multiple trust paths between two pubkeys through the follow graph. Computes trust attenuation per hop (product of normalized WoT scores with mutual-follow bonus), identifies weakest links, and combines independent paths for an overall trust assessment. Useful for determining how two accounts are connected through mutual trust relationships.",
+        "parameters": [
+          {"name": "from", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Source hex pubkey or npub"},
+          {"name": "to", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Target hex pubkey or npub"},
+          {"name": "max_paths", "in": "query", "required": false, "schema": {"type": "integer", "default": 3, "minimum": 1, "maximum": 5}, "description": "Maximum number of distinct paths to find (1-5, default 3)"}
+        ],
+        "responses": {
+          "200": {"description": "Trust path analysis with scored paths, diversity metrics, and classification"},
+          "400": {"description": "Missing or invalid pubkeys"},
+          "402": {"description": "L402 payment required (5 sats)"}
         }
       }
     },

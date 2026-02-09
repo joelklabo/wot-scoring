@@ -58,6 +58,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/anomalies":     3,
 			"/sybil":         3,
 			"/sybil/batch":   10,
+			"/trust-path":    5,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),

@@ -2357,6 +2357,50 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== TRUST PATHS ===== -->
+<h2 id="trust-paths">Trust Paths</h2>
+<p class="section-intro">Multi-hop trust path analysis. Find and score the trust connections between any two pubkeys through the follow graph.</p>
+
+<div class="endpoint-card" id="ep-trust-path">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/trust-path</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Finds multiple trust paths between two pubkeys, scores each path by trust attenuation (product of WoT scores along hops with mutual-follow bonus), identifies weakest links, and combines independent paths for overall trust assessment. Returns classification: strong, moderate, weak, or none.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">from</span><span class="param-type">string</span><span class="param-desc">Source hex pubkey or npub <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">to</span><span class="param-type">string</span><span class="param-desc">Target hex pubkey or npub <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">max_paths</span><span class="param-type">int</span><span class="param-desc">Maximum paths to find (1-5, default 3)</span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "from": "82341f88...",
+  "to": "e88a691e...",
+  "connected": true,
+  "paths": [
+    {
+      "hops": [
+        {"pubkey": "82341f88...", "wot_score": 65, "is_mutual": true},
+        {"pubkey": "abc123...", "wot_score": 72, "is_mutual": false},
+        {"pubkey": "e88a691e...", "wot_score": 45, "is_mutual": false}
+      ],
+      "length": 2,
+      "trust_score": 0.362,
+      "weakest_hop": 2
+    }
+  ],
+  "best_trust": 0.362,
+  "path_diversity": 1,
+  "overall_trust": 0.362,
+  "classification": "moderate",
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2847,7 +2891,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -3396,6 +3440,7 @@ func main() {
 	http.HandleFunc("/anomalies", handleAnomalies)
 	http.HandleFunc("/sybil", handleSybil)
 	http.HandleFunc("/sybil/batch", handleSybilBatch)
+	http.HandleFunc("/trust-path", handleTrustPath)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
