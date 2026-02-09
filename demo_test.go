@@ -165,6 +165,126 @@ func TestDemo_HasTrustCircleCompare(t *testing.T) {
 	}
 }
 
+func TestDemo_HasNetworkHealth(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "healthBanner") {
+		t.Error("expected network health banner")
+	}
+	if !strings.Contains(body, "healthContent") {
+		t.Error("expected health content section")
+	}
+	if !strings.Contains(body, "/network-health") {
+		t.Error("expected network-health endpoint call")
+	}
+	if !strings.Contains(body, "Gini Coeff") {
+		t.Error("expected Gini coefficient display")
+	}
+	if !strings.Contains(body, "Network Health") {
+		t.Error("expected Network Health title")
+	}
+}
+
+func TestDemo_HasSpamDetection(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "spamCard") {
+		t.Error("expected spam detection card")
+	}
+	if !strings.Contains(body, "spamContent") {
+		t.Error("expected spam content section")
+	}
+	if !strings.Contains(body, "/spam?pubkey=") {
+		t.Error("expected spam endpoint call")
+	}
+	if !strings.Contains(body, "renderSpam") {
+		t.Error("expected renderSpam function")
+	}
+}
+
+func TestDemo_HasAnomalyDetection(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "anomalyCard") {
+		t.Error("expected anomaly detection card")
+	}
+	if !strings.Contains(body, "anomalyContent") {
+		t.Error("expected anomaly content section")
+	}
+	if !strings.Contains(body, "/anomalies?pubkey=") {
+		t.Error("expected anomalies endpoint call")
+	}
+	if !strings.Contains(body, "renderAnomalies") {
+		t.Error("expected renderAnomalies function")
+	}
+}
+
+func TestDemo_HasTrustPathFinder(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "pathCard") {
+		t.Error("expected trust path card")
+	}
+	if !strings.Contains(body, "pathTarget") {
+		t.Error("expected path target input")
+	}
+	if !strings.Contains(body, "runPathFinder") {
+		t.Error("expected runPathFinder function")
+	}
+	if !strings.Contains(body, "Find Trust Paths") {
+		t.Error("expected Find Trust Paths button")
+	}
+	if !strings.Contains(body, "/trust-path?from=") {
+		t.Error("expected trust-path endpoint call")
+	}
+	if !strings.Contains(body, "Best Trust") {
+		t.Error("expected Best Trust display")
+	}
+}
+
+func TestDemo_HasLinkPrediction(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "predictCard") {
+		t.Error("expected link prediction card")
+	}
+	if !strings.Contains(body, "predictTarget") {
+		t.Error("expected predict target input")
+	}
+	if !strings.Contains(body, "runPredict") {
+		t.Error("expected runPredict function")
+	}
+	if !strings.Contains(body, "/predict?source=") {
+		t.Error("expected predict endpoint call")
+	}
+	if !strings.Contains(body, "Topology Signals") {
+		t.Error("expected topology signals display")
+	}
+	if !strings.Contains(body, "Will They Follow") {
+		t.Error("expected Will They Follow title")
+	}
+}
+
 func TestDemo_HasResponsiveLayout(t *testing.T) {
 	req := httptest.NewRequest("GET", "/demo", nil)
 	rr := httptest.NewRecorder()

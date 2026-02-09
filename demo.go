@@ -251,6 +251,38 @@ const demoPageHTML = `<!DOCTYPE html>
   .overlap-section { margin-bottom: 0.8rem; }
   .overlap-section h3 { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
 
+  /* Network Health */
+  .health-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 0.8rem; }
+  @media (max-width: 700px) { .health-grid { grid-template-columns: 1fr 1fr; } }
+  .health-cell { text-align: center; padding: 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.03); }
+  .health-cell .num { font-size: 1.1rem; font-weight: 700; }
+  .health-cell .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+  .health-banner {
+    display: none;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1rem 0.5rem;
+  }
+  .health-banner.visible { display: block; }
+
+  /* Spam Detection */
+  .spam-prob { font-size: 2.2rem; font-weight: 700; }
+  .spam-label { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; margin-bottom: 0.6rem; }
+  .spam-signals { }
+  .spam-signal { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+  .spam-signal:last-child { border-bottom: none; }
+  .spam-signal .bar-bg { width: 60px; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .spam-signal .bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Trust Path */
+  .path-container { }
+  .path-item { margin-bottom: 0.8rem; padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.02); }
+  .path-header { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem; }
+  .path-hops { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; flex-wrap: wrap; }
+  .path-node { padding: 0.2rem 0.4rem; border-radius: 4px; background: rgba(88,166,255,0.1); font-family: monospace; }
+  .path-arrow { color: var(--muted); }
+  .path-node.mutual { border: 1px solid var(--green); }
+
   /* Footer */
   .footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
   .footer a { color: var(--accent); text-decoration: none; }
@@ -268,6 +300,13 @@ const demoPageHTML = `<!DOCTYPE html>
   <button id="searchBtn" onclick="doSearch()">Explore</button>
 </div>
 <div id="status"></div>
+
+<div class="health-banner" id="healthBanner">
+  <div class="card">
+    <h2>Network Health</h2>
+    <div id="healthContent"><span style="color:var(--muted);font-size:0.85rem;">Loading network stats...</span></div>
+  </div>
+</div>
 
 <div class="dashboard" id="dashboard">
   <div class="card" id="scoreCard">
@@ -305,6 +344,16 @@ const demoPageHTML = `<!DOCTYPE html>
     <div id="qualityContent"></div>
   </div>
 
+  <div class="card" id="spamCard">
+    <h2>Spam Detection</h2>
+    <div id="spamContent"></div>
+  </div>
+
+  <div class="card" id="anomalyCard">
+    <h2>Anomaly Detection</h2>
+    <div id="anomalyContent"></div>
+  </div>
+
   <div class="card full" id="compareCard">
     <h2>Trust Circle Compare</h2>
     <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
@@ -336,6 +385,38 @@ const demoPageHTML = `<!DOCTYPE html>
       <div class="sim-affected" id="simAffected"></div>
     </div>
   </div>
+
+  <div class="card full" id="pathCard">
+    <h2>Trust Path Finder</h2>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
+      Discover how trust flows between two identities through the network.
+    </p>
+    <div class="sim-row">
+      <input type="text" id="pathTarget" placeholder="Target pubkey (npub1... or hex)">
+      <button id="pathBtn" onclick="runPathFinder()" style="background:#d29922;">Find Trust Paths</button>
+    </div>
+    <div id="pathStatus" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+    <div class="sim-result" id="pathResult">
+      <div class="sim-stats" id="pathStats"></div>
+      <div class="path-container" id="pathPaths"></div>
+    </div>
+  </div>
+
+  <div class="card full" id="predictCard">
+    <h2>Link Prediction — Will They Follow?</h2>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
+      Predict the likelihood of a follow relationship between two pubkeys using graph topology signals.
+    </p>
+    <div class="sim-row">
+      <input type="text" id="predictTarget" placeholder="Target pubkey (npub1... or hex)">
+      <button id="predictBtn" onclick="runPredict()" style="background:var(--accent);">Predict</button>
+    </div>
+    <div id="predictStatus" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+    <div class="sim-result" id="predictResult">
+      <div class="sim-stats" id="predictStats"></div>
+      <div id="predictDetails"></div>
+    </div>
+  </div>
 </div>
 
 <div class="footer">
@@ -364,7 +445,7 @@ async function doSearch() {
     const base = window.location.origin;
     const pk = encodeURIComponent(raw);
 
-    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes] = await Promise.all([
+    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes, spamRes, anomalyRes] = await Promise.all([
       fetch(base + '/score?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/sybil?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/reputation?pubkey=' + pk).then(r => r.json()),
@@ -374,7 +455,9 @@ async function doSearch() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({pubkeys: [raw]})
       }).then(r => r.json()),
-      fetch(base + '/follow-quality?pubkey=' + pk + '&suggestions=5').then(r => r.json())
+      fetch(base + '/follow-quality?pubkey=' + pk + '&suggestions=5').then(r => r.json()),
+      fetch(base + '/spam?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/anomalies?pubkey=' + pk).then(r => r.json())
     ]);
 
     if (scoreRes.error) throw new Error(scoreRes.error);
@@ -385,6 +468,8 @@ async function doSearch() {
     renderReputation(repRes);
     renderCircle(circleRes);
     renderQuality(qualityRes);
+    renderSpam(spamRes);
+    renderAnomalies(anomalyRes);
 
     dashboard.classList.add('visible');
     status.textContent = '';
@@ -570,6 +655,132 @@ function qualBar(label, value, max) {
 
 let currentPubkey = '';
 
+// Auto-load network health on page open
+(async function loadHealth() {
+  try {
+    const base = window.location.origin;
+    const data = await fetch(base + '/network-health').then(r => r.json());
+    if (data.error) throw new Error(data.error);
+
+    const hs = data.health_score ?? 0;
+    let color = 'var(--green)';
+    if (hs < 60) color = 'var(--yellow)';
+    if (hs < 30) color = 'var(--red)';
+
+    const ds = data.degree_stats || {};
+    const sd = data.score_distribution || {};
+    const cn = data.connectivity || {};
+
+    let html = '<div class="health-grid">';
+    html += hCell(hs, 'Health Score', color);
+    html += hCell((data.graph_size || 0).toLocaleString(), 'Nodes');
+    html += hCell((data.edge_count || 0).toLocaleString(), 'Edges');
+    html += hCell(((data.reciprocity || 0) * 100).toFixed(1) + '%', 'Reciprocity');
+    html += hCell(sd.gini_coefficient?.toFixed(3) || '—', 'Gini Coeff');
+    html += hCell(sd.centralization || '—', 'Centralization');
+    html += hCell(ds.power_law_alpha?.toFixed(2) || '—', 'Power Law α');
+    html += hCell((cn.largest_component_percent || 0).toFixed(1) + '%', 'Largest Component');
+    html += hCell(data.classification || '—', 'Classification');
+    html += '</div>';
+
+    const hubs = data.top_hubs || [];
+    if (hubs.length > 0) {
+      html += '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem;">Top Hubs</div>';
+      html += '<div class="member-list" style="max-height:120px;">';
+      hubs.slice(0, 5).forEach((h, i) => {
+        const pk = h.pubkey.slice(0, 8) + '...' + h.pubkey.slice(-6);
+        html += '<div class="member"><span class="rank">' + (i+1) + '</span><span class="pk">' + pk + '</span><span class="score" style="color:var(--accent)">' + h.score + '</span></div>';
+      });
+      html += '</div>';
+    }
+
+    $('#healthContent').innerHTML = html;
+    $('#healthBanner').classList.add('visible');
+  } catch (e) {
+    $('#healthContent').innerHTML = '<span style="color:var(--red);font-size:0.8rem;">Failed to load: ' + e.message + '</span>';
+    $('#healthBanner').classList.add('visible');
+  }
+})();
+
+function hCell(num, label, color) {
+  const style = color ? ' style="color:' + color + '"' : '';
+  return '<div class="health-cell"><div class="num"' + style + '>' + num + '</div><div class="lbl">' + label + '</div></div>';
+}
+
+function spamColor(prob) {
+  if (prob <= 0.3) return 'var(--green)';
+  if (prob <= 0.6) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function renderSpam(data) {
+  if (data.error) { $('#spamContent').innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">' + data.error + '</span>'; return; }
+  const prob = data.spam_probability ?? 0;
+  const cls = data.classification || '—';
+  const color = spamColor(prob);
+
+  let html = '<div class="spam-prob" style="color:' + color + '">' + (prob * 100).toFixed(0) + '%</div>';
+  html += '<div class="spam-label">' + cls + '</div>';
+
+  const signals = data.signals || [];
+  if (signals.length > 0) {
+    html += '<div class="spam-signals">';
+    signals.forEach(s => {
+      const pct = Math.min((s.score || 0) * 100, 100).toFixed(0);
+      const barColor = s.score <= 0.3 ? 'var(--green)' : s.score <= 0.6 ? 'var(--yellow)' : 'var(--red)';
+      html += '<div class="spam-signal">';
+      html += '<span>' + (s.name || '').replace(/_/g, ' ') + '</span>';
+      html += '<div class="bar-bg"><div class="bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  if (data.summary) {
+    html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">' + data.summary + '</div>';
+  }
+
+  $('#spamContent').innerHTML = html;
+}
+
+function renderAnomalies(data) {
+  if (data.error) { $('#anomalyContent').innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">' + data.error + '</span>'; return; }
+  const risk = data.risk_level || 'clean';
+  const count = data.anomaly_count || 0;
+  let rColor = 'var(--green)';
+  if (risk === 'medium') rColor = 'var(--yellow)';
+  if (risk === 'high') rColor = 'var(--red)';
+  if (risk === 'low') rColor = 'var(--accent)';
+
+  let html = '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem;">';
+  html += '<div class="spam-prob" style="color:' + rColor + '">' + count + '</div>';
+  html += '<div><div style="font-size:0.9rem;font-weight:600;">' + risk.toUpperCase() + ' Risk</div>';
+  html += '<div style="font-size:0.8rem;color:var(--muted);">' + (data.followers || 0) + ' followers · ' + (data.follows || 0) + ' following</div></div>';
+  html += '</div>';
+
+  const anomalies = data.anomalies || [];
+  if (anomalies.length > 0) {
+    anomalies.forEach(a => {
+      let sevColor = 'var(--accent)';
+      if (a.severity === 'medium') sevColor = 'var(--yellow)';
+      if (a.severity === 'high') sevColor = 'var(--red)';
+      html += '<div style="padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.8rem;">';
+      html += '<span style="color:' + sevColor + ';font-weight:600;text-transform:uppercase;font-size:0.7rem;">' + a.severity + '</span> ';
+      html += '<span>' + (a.type || '').replace(/_/g, ' ') + '</span>';
+      html += '<div style="color:var(--muted);font-size:0.75rem;">' + (a.description || '') + '</div>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div style="color:var(--green);font-size:0.8rem;">No anomalies detected — account looks clean.</div>';
+  }
+
+  const gbr = data.ghost_ratio ?? 0;
+  const fbr = data.follow_back_ratio ?? 0;
+  html += '<div style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem;">Ghost followers: ' + ((gbr*100).toFixed(1)) + '% · Follow-back ratio: ' + ((fbr*100).toFixed(1)) + '%</div>';
+
+  $('#anomalyContent').innerHTML = html;
+}
+
 async function runCompare() {
   const target = $('#compareTarget').value.trim();
   if (!target || !currentPubkey) return;
@@ -682,6 +893,132 @@ async function runSimulation() {
     simStatus.style.color = 'var(--red)';
   } finally {
     simBtn.disabled = false;
+  }
+}
+
+async function runPathFinder() {
+  const target = $('#pathTarget').value.trim();
+  if (!target || !currentPubkey) return;
+  const pathBtn = $('#pathBtn');
+  const pathStatus = $('#pathStatus');
+  const pathResult = $('#pathResult');
+  pathBtn.disabled = true;
+  pathStatus.textContent = 'Finding trust paths...';
+  pathResult.classList.remove('visible');
+
+  try {
+    const base = window.location.origin;
+    const res = await fetch(base + '/trust-path?from=' + encodeURIComponent(currentPubkey) + '&to=' + encodeURIComponent(target) + '&max_paths=3');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    let color = 'var(--green)';
+    const bt = data.best_trust || 0;
+    if (bt < 0.3) color = 'var(--yellow)';
+    if (bt < 0.1) color = 'var(--red)';
+
+    let statsHtml = '';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:' + color + '">' + (bt * 100).toFixed(0) + '%</div><div class="lbl">Best Trust</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--accent)">' + (data.path_diversity || 0) + '</div><div class="lbl">Paths Found</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + (data.overall_trust ? (data.overall_trust * 100).toFixed(0) + '%' : '—') + '</div><div class="lbl">Overall Trust</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + (data.classification || '—') + '</div><div class="lbl">Strength</div></div>';
+    $('#pathStats').innerHTML = statsHtml;
+
+    let pathsHtml = '';
+    const paths = data.paths || [];
+    if (paths.length > 0) {
+      paths.forEach((p, i) => {
+        pathsHtml += '<div class="path-item">';
+        pathsHtml += '<div class="path-header"><span>Path ' + (i+1) + ' (' + p.length + ' hops)</span><span style="color:var(--accent)">' + (p.trust_score * 100).toFixed(1) + '% trust</span></div>';
+        pathsHtml += '<div class="path-hops">';
+        const hops = p.hops || [];
+        hops.forEach((h, j) => {
+          const pk = h.pubkey.slice(0, 6) + '..' + h.pubkey.slice(-4);
+          const mutualCls = h.is_mutual ? ' mutual' : '';
+          pathsHtml += '<span class="path-node' + mutualCls + '" title="WoT: ' + h.wot_score + (h.is_mutual ? ' (mutual)' : '') + '">' + pk + ' <small style="color:var(--muted)">' + h.wot_score + '</small></span>';
+          if (j < hops.length - 1) pathsHtml += '<span class="path-arrow">→</span>';
+        });
+        pathsHtml += '</div></div>';
+      });
+    } else if (!data.connected) {
+      pathsHtml = '<div style="color:var(--muted);font-size:0.8rem;">No trust path found — these identities are not connected in the graph.</div>';
+    }
+    $('#pathPaths').innerHTML = pathsHtml;
+
+    pathResult.classList.add('visible');
+    pathStatus.textContent = data.connected ? 'Found ' + (data.path_diversity || 0) + ' trust path(s) — ' + (data.classification || '') + ' connection.' : 'No connection found.';
+  } catch (e) {
+    pathStatus.textContent = 'Error: ' + e.message;
+    pathStatus.style.color = 'var(--red)';
+  } finally {
+    pathBtn.disabled = false;
+  }
+}
+
+async function runPredict() {
+  const target = $('#predictTarget').value.trim();
+  if (!target || !currentPubkey) return;
+  const predBtn = $('#predictBtn');
+  const predStatus = $('#predictStatus');
+  const predResult = $('#predictResult');
+  predBtn.disabled = true;
+  predStatus.textContent = 'Analyzing graph topology...';
+  predResult.classList.remove('visible');
+
+  try {
+    const base = window.location.origin;
+    const res = await fetch(base + '/predict?source=' + encodeURIComponent(currentPubkey) + '&target=' + encodeURIComponent(target));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const pred = data.prediction ?? 0;
+    let color = 'var(--green)';
+    if (pred < 0.5) color = 'var(--yellow)';
+    if (pred < 0.3) color = 'var(--muted)';
+    if (pred < 0.1) color = 'var(--red)';
+
+    let statsHtml = '';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:' + color + '">' + (pred * 100).toFixed(0) + '%</div><div class="lbl">Prediction</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + ((data.confidence || 0) * 100).toFixed(0) + '%</div><div class="lbl">Confidence</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--accent)">' + (data.classification || '—') + '</div><div class="lbl">Likelihood</div></div>';
+    if (data.already_follows) {
+      statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--green)">Yes</div><div class="lbl">Already Follows</div></div>';
+    }
+    $('#predictStats').innerHTML = statsHtml;
+
+    let detHtml = '';
+    const signals = data.signals || [];
+    if (signals.length > 0) {
+      detHtml += '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.4rem;">Topology Signals</div>';
+      signals.forEach(s => {
+        const pct = Math.min((s.normalized || 0) * 100, 100).toFixed(0);
+        const barColor = s.normalized >= 0.5 ? 'var(--green)' : s.normalized >= 0.2 ? 'var(--yellow)' : 'var(--muted)';
+        detHtml += '<div class="spam-signal">';
+        detHtml += '<span>' + (s.name || '').replace(/_/g, ' ') + ' <small style="color:var(--muted)">(' + ((s.weight || 0) * 100).toFixed(0) + '%)</small></span>';
+        detHtml += '<div class="bar-bg"><div class="bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>';
+        detHtml += '</div>';
+      });
+    }
+
+    const mutuals = data.top_mutuals || [];
+    if (mutuals.length > 0) {
+      detHtml += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.6rem;margin-bottom:0.3rem;">Shared Connections (' + mutuals.length + ')</div>';
+      detHtml += '<div class="member-list" style="max-height:120px;">';
+      mutuals.slice(0, 8).forEach(m => {
+        const pk = m.pubkey.slice(0, 8) + '...' + m.pubkey.slice(-6);
+        detHtml += '<div class="member"><span class="pk">' + pk + '</span><span class="score" style="color:' + scoreColor(m.wot_score) + '">' + m.wot_score + '</span></div>';
+      });
+      detHtml += '</div>';
+    }
+
+    $('#predictDetails').innerHTML = detHtml;
+    predResult.classList.add('visible');
+    predStatus.textContent = 'Prediction: ' + (data.classification || '') + ' (' + (pred * 100).toFixed(0) + '% probability)';
+  } catch (e) {
+    predStatus.textContent = 'Error: ' + e.message;
+    predStatus.style.color = 'var(--red)';
+  } finally {
+    predBtn.disabled = false;
   }
 }
 </script>
