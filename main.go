@@ -1906,6 +1906,7 @@ footer a:hover{text-decoration:underline}
 <div class="tab" data-tab="nip05">NIP-05 Verify</div>
 <div class="tab" data-tab="nip05reverse">NIP-05 Reverse</div>
 <div class="tab" data-tab="timeline">Timeline</div>
+<div class="tab" data-tab="spam">Spam Check</div>
 </div>
 
 <div class="tab-content active" id="tab-lookup">
@@ -1960,6 +1961,14 @@ footer a:hover{text-decoration:underline}
 </div>
 </div>
 
+<div class="tab-content" id="tab-spam">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Analyze a pubkey for spam indicators using WoT graph signals, engagement metrics, and behavioral patterns.</p>
+<div class="search">
+<input type="text" id="spam-input" placeholder="Enter hex pubkey or npub to check for spam...">
+<div id="spam-result"></div>
+</div>
+</div>
+
 <div class="leaderboard">
 <h2>Trust Leaderboard</h2>
 <table class="lb-table">
@@ -2009,6 +2018,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/nip05?id=user@domain</span><span class="desc">— NIP-05 verification + WoT trust profile</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/nip05/batch</span><span class="desc">— Bulk NIP-05 verification (up to 50 identifiers)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/nip05/reverse?pubkey=&lt;hex&gt;</span><span class="desc">— Reverse NIP-05 lookup (pubkey → identity, bidirectional verification)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/spam?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Spam detection: multi-signal analysis with classification</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 </div>
 
@@ -2017,7 +2027,7 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /spam</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
@@ -2290,6 +2300,41 @@ html+='<div style="margin-top:.5rem;font-size:.75rem;color:#666">Bar = cumulativ
 html+='</div>';
 tlResult.innerHTML=html;
 }).catch(()=>{err(tlResult,"Error loading timeline")})},600)});
+
+const spamInput=document.getElementById("spam-input"),spamResult=document.getElementById("spam-result");
+let spamTimer;
+spamInput.addEventListener("input",()=>{clearTimeout(spamTimer);const v=spamInput.value.trim();if(!v){spamResult.innerHTML="";return}
+if(v.length<63&&!v.startsWith("npub1")){spamResult.innerHTML='<div style="color:#888;margin-top:.5rem;font-size:.9rem">Enter a 64-char hex pubkey or npub</div>';return}
+spamTimer=setTimeout(()=>{
+spamResult.innerHTML='<div style="color:#555;margin-top:.5rem">Analyzing for spam signals...</div>';
+fetch("/spam?pubkey="+encodeURIComponent(v)).then(r=>r.json()).then(d=>{
+if(d.error){err(spamResult,d.error);return}
+let html='<div class="score-card fade-in">';
+const probPct=Math.round(d.spam_probability*100);
+const cls=d.classification;
+const clsColor=cls==="likely_spam"?"#ef4444":cls==="suspicious"?"#f59e0b":"#10b981";
+html+='<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">';
+html+='<div class="score-big" style="color:'+clsColor+'">'+probPct+'%%</div>';
+html+='<span style="color:'+clsColor+';font-size:1.1rem;font-weight:600">'+cls.replace(/_/g," ").toUpperCase()+'</span>';
+html+='</div>';
+html+='<div style="color:#888;font-size:.9rem;margin-top:.5rem">'+d.summary+'</div>';
+html+='<div style="margin-top:1rem"><h3 style="color:#ccc;font-size:.95rem;margin-bottom:.5rem">Signal Breakdown</h3>';
+d.signals.forEach(s=>{
+const sigPct=Math.round(s.score/s.weight*100);
+const sigColor=sigPct>70?"#ef4444":sigPct>30?"#f59e0b":"#10b981";
+html+='<div style="margin:.4rem 0;font-size:.85rem">';
+html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">';
+html+='<span style="color:#aaa">'+s.name.replace(/_/g," ")+'</span>';
+html+='<span style="color:'+sigColor+';font-weight:500">'+s.score.toFixed(3)+' / '+s.weight.toFixed(2)+'</span>';
+html+='</div>';
+html+='<div style="background:#1a1a2e;border-radius:4px;height:8px;overflow:hidden">';
+html+='<div style="width:'+Math.min(sigPct,100)+'%%;height:100%%;background:'+sigColor+';border-radius:4px"></div>';
+html+='</div>';
+html+='<div style="color:#666;font-size:.75rem;margin-top:1px">'+s.reason+'</div>';
+html+='</div>'});
+html+='</div></div>';
+spamResult.innerHTML=html;
+}).catch(()=>{err(spamResult,"Error analyzing pubkey")})},600)});
 </script>
 </body>
 </html>`
@@ -2443,6 +2488,7 @@ func main() {
 	http.HandleFunc("/nip05/batch", handleNIP05Batch)
 	http.HandleFunc("/nip05/reverse", handleNIP05Reverse)
 	http.HandleFunc("/timeline", handleTimeline)
+	http.HandleFunc("/spam", handleSpam)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

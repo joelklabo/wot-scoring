@@ -18,13 +18,14 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 30+ endpoints serve live data. 196 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, and trust timeline tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 30+ endpoints serve live data. 211 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, and spam detection tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
 - **Compare** — side-by-side trust comparison with relationship badges and shared follow analysis
 - **Trust Path** — BFS shortest path visualization between any two pubkeys
 - **Timeline** — trust evolution over time with monthly follower growth bars and velocity coloring
+- **Spam Check** — multi-signal spam analysis with visual signal breakdown and classification
 - **Leaderboard** — top 10 pubkeys with live data from the scoring API
 
 ## Depth & Innovation
@@ -45,6 +46,7 @@ Beyond standard PageRank scoring, we implemented:
 - **NIP-05 identity verification** (`/nip05`) — resolves NIP-05 identifiers (user@domain) to pubkeys via standard `.well-known/nostr.json`, then returns the full WoT trust profile. Bridges the Nostr identity layer with NIP-85 trust assertions in a single API call.
 - **Bulk NIP-05 verification** (`POST /nip05/batch`) — resolves up to 50 NIP-05 identifiers concurrently and returns trust profiles for each. Enables clients to verify and trust-score entire contact lists or directories in a single request.
 - **Reverse NIP-05 lookup** (`/nip05/reverse`) — given a pubkey, fetches their kind 0 profile from relays, extracts the NIP-05 identifier, and bidirectionally verifies it resolves back to the same pubkey. Enables "who is this pubkey?" identity lookups — the inverse of standard NIP-05 resolution.
+- **Spam detection** (`/spam`) — multi-signal spam classification combining 6 weighted indicators: WoT score (30%), follower/following ratio (15%), account age (15%), engagement received (15%), reports received (15%), and activity pattern (10%). Returns a 0.0-1.0 spam probability with classification ("likely_human", "suspicious", "likely_spam") and transparent signal breakdown explaining each factor. Enables clients to filter spam without running their own heuristics.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
@@ -78,7 +80,7 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 189 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, topics, activity hours, reports, and API handlers
+- 211 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, topics, activity hours, reports, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability
@@ -99,6 +101,7 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 | `/recommend` | 2 sats | 10/day per IP |
 | `/compare` | 2 sats | 10/day per IP |
 | `/nip05/reverse` | 2 sats | 10/day per IP |
+| `/spam` | 2 sats | 10/day per IP |
 | `/audit` | 5 sats | 10/day per IP |
 | `/nip05/batch` | 5 sats | 10/day per IP |
 | `/batch` | 10 sats | 10/day per IP |
