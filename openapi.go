@@ -51,7 +51,8 @@ const openAPISpec = `{
     {"name": "Link Prediction", "description": "Graph-theoretic link prediction for follow relationship likelihood"},
     {"name": "Real-Time", "description": "WebSocket streaming for live score updates"},
     {"name": "Network Analysis", "description": "Graph topology health metrics and network-wide analysis"},
-    {"name": "Cross-Provider", "description": "Compare WoT scores across multiple NIP-85 providers for consensus analysis"}
+    {"name": "Cross-Provider", "description": "Compare WoT scores across multiple NIP-85 providers for consensus analysis"},
+    {"name": "Trust Circles", "description": "Mutual-follow trust circle analysis with cohesion, density, and role metrics"}
   ],
   "paths": {
     "/score": {
@@ -777,6 +778,22 @@ const openAPISpec = `{
         "responses": {
           "101": {"description": "WebSocket upgrade successful"},
           "200": {"description": "Endpoint documentation (non-WebSocket request)"}
+        }
+      }
+    },
+    "/trust-circle": {
+      "get": {
+        "tags": ["Trust Circles"],
+        "operationId": "getTrustCircle",
+        "summary": "Analyze a pubkey's mutual-follow trust circle",
+        "description": "Returns the trust circle (mutual follows) for a pubkey with per-member scoring, shared follow counts, mutual strength metrics, and aggregate circle analytics including cohesion, density, and role distribution. The inner circle highlights the top 10 most-trusted mutual connections.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Hex pubkey or npub to analyze"}
+        ],
+        "responses": {
+          "200": {"description": "Trust circle analysis with members, inner circle, and metrics"},
+          "400": {"description": "Missing or invalid pubkey"},
+          "402": {"description": "L402 payment required (5 sats)"}
         }
       }
     },

@@ -1903,6 +1903,9 @@ footer a{color:#7c3aed}
 <a href="#engagement">Engagement</a>
 <a href="#ranking">Ranking</a>
 <a href="#infrastructure">Infrastructure</a>
+<a href="#influence">Influence</a>
+<a href="#trust-circles">Trust Circles</a>
+<a href="#network-health">Network Health</a>
 </div>
 
 <!-- ===== SCORING ===== -->
@@ -2600,6 +2603,63 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
       "classification": "connector"
     }
   ],
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
+<!-- ===== TRUST CIRCLES ===== -->
+<h2 id="trust-circles">Trust Circles</h2>
+<p class="section-intro">Mutual-follow trust circle analysis. Discover a pubkey's closest trusted connections and how tightly connected they are.</p>
+
+<div class="endpoint-card" id="ep-trust-circle">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/trust-circle</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Analyzes the trust circle (mutual follows) for a pubkey. Returns per-member trust scores, shared follow counts, mutual strength metrics, and aggregate circle analytics including cohesion (mutual interconnection), density (directed edge coverage), role distribution, and an inner circle of the top 10 most-trusted connections.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub to analyze <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "32e1827635...",
+  "trust_score": 78,
+  "circle_size": 187,
+  "members": [
+    {
+      "pubkey": "82341f882b...",
+      "trust_score": 89,
+      "percentile": 0.992,
+      "rank": 42,
+      "mutual_strength": 0.832,
+      "shared_follows": 45,
+      "classification": "hub"
+    },
+    {
+      "pubkey": "abc123...",
+      "trust_score": 67,
+      "percentile": 0.891,
+      "rank": 567,
+      "mutual_strength": 0.721,
+      "shared_follows": 23,
+      "classification": "connector"
+    }
+  ],
+  "inner_circle": [
+    {"pubkey": "82341f882b...", "trust_score": 89, "mutual_strength": 0.832, "classification": "hub"}
+  ],
+  "metrics": {
+    "avg_trust_score": 42.3,
+    "median_trust": 38,
+    "cohesion": 0.234,
+    "density": 0.156,
+    "top_role": "participant",
+    "role_counts": {"hub": 3, "authority": 12, "connector": 28, "participant": 144}
+  },
   "graph_size": 51319
 }</div>
 </div>
@@ -3784,6 +3844,7 @@ func main() {
 	http.HandleFunc("/influence/batch", handleInfluenceBatch)
 	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/compare-providers", handleCompareProviders)
+	http.HandleFunc("/trust-circle", handleTrustCircle)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {

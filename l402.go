@@ -65,6 +65,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/influence/batch":    10,
 			"/network-health":     5,
 			"/compare-providers":  5,
+			"/trust-circle":       5,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),
