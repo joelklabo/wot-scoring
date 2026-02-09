@@ -733,6 +733,106 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+const landingPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WoT Scoring — Nostr Web of Trust</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a0a;color:#e0e0e0;line-height:1.6}
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:2rem;color:#fff;margin-bottom:.25rem}
+.subtitle{color:#888;font-size:1.1rem;margin-bottom:2rem}
+.badge{display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:.15rem .5rem;font-size:.8rem;color:#7c3aed;margin-right:.5rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin:2rem 0}
+.stat{background:#111;border:1px solid #222;border-radius:8px;padding:1rem;text-align:center}
+.stat-value{font-size:1.8rem;font-weight:700;color:#7c3aed}
+.stat-label{font-size:.85rem;color:#888;margin-top:.25rem}
+.search{margin:2rem 0}
+.search input{width:100%%;padding:.75rem 1rem;background:#111;border:1px solid #333;border-radius:8px;color:#fff;font-size:1rem}
+.search input::placeholder{color:#555}
+.search input:focus{outline:none;border-color:#7c3aed}
+#result{margin-top:1rem;min-height:2rem}
+.score-card{background:#111;border:1px solid #222;border-radius:8px;padding:1.5rem;margin-top:1rem}
+.score-big{font-size:3rem;font-weight:700;color:#7c3aed}
+.endpoints{margin:2rem 0}
+.endpoints h2{font-size:1.3rem;color:#fff;margin-bottom:1rem}
+.endpoint{background:#111;border:1px solid #222;border-radius:6px;padding:.75rem 1rem;margin-bottom:.5rem;font-family:monospace;font-size:.9rem}
+.endpoint .method{color:#7c3aed;font-weight:700;margin-right:.5rem}
+.endpoint .path{color:#fff}
+.endpoint .desc{color:#666;margin-left:.5rem}
+.nip85{background:#111;border:1px solid #222;border-radius:8px;padding:1.5rem;margin:2rem 0}
+.nip85 h2{color:#fff;margin-bottom:.75rem}
+.kind{display:flex;gap:1rem;align-items:baseline;margin-bottom:.5rem}
+.kind-num{color:#7c3aed;font-weight:700;font-family:monospace;min-width:5rem}
+.kind-desc{color:#aaa}
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid #222;color:#555;font-size:.85rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+footer a{color:#7c3aed;text-decoration:none}
+footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>WoT Scoring</h1>
+<p class="subtitle">NIP-85 Trusted Assertions for the Nostr Web of Trust</p>
+<span class="badge">NIP-85</span>
+<span class="badge">PageRank</span>
+<span class="badge">Go</span>
+
+<div class="stats">
+<div class="stat"><div class="stat-value">%d</div><div class="stat-label">Nodes</div></div>
+<div class="stat"><div class="stat-value">%d</div><div class="stat-label">Edges</div></div>
+<div class="stat"><div class="stat-value">%d</div><div class="stat-label">Events Scored</div></div>
+<div class="stat"><div class="stat-value">%d</div><div class="stat-label">Articles</div></div>
+<div class="stat"><div class="stat-value">%d</div><div class="stat-label">Identifiers</div></div>
+<div class="stat"><div class="stat-value">%s</div><div class="stat-label">Uptime</div></div>
+</div>
+
+<div class="search">
+<input type="text" id="pubkey-input" placeholder="Enter a Nostr pubkey (hex or npub) to look up trust score..." autofocus>
+<div id="result"></div>
+</div>
+
+<div class="nip85">
+<h2>NIP-85 Assertion Kinds</h2>
+<div class="kind"><span class="kind-num">30382</span><span class="kind-desc">User Trust Assertions — PageRank score, follower count, post/reply/reaction/zap stats</span></div>
+<div class="kind"><span class="kind-num">30383</span><span class="kind-desc">Event Assertions — engagement scores for individual notes (comments, reposts, reactions, zaps)</span></div>
+<div class="kind"><span class="kind-num">30384</span><span class="kind-desc">Addressable Event Assertions — scores for articles (kind 30023) and live activities (kind 30311)</span></div>
+<div class="kind"><span class="kind-num">30385</span><span class="kind-desc">External Identifier Assertions — scores for hashtags and URLs (NIP-73)</span></div>
+</div>
+
+<div class="endpoints">
+<h2>API Endpoints</h2>
+<div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex&gt;</span><span class="desc">— Trust score (kind 30382)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/top</span><span class="desc">— Top 50 scored pubkeys</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/health</span><span class="desc">— Health check</span></div>
+</div>
+
+<footer>
+<span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
+<span><a href="https://github.com/joelklabo/wot-scoring">Source (MIT)</a></span>
+<span>Operator: <a href="https://njump.me/max@klabo.world">max@klabo.world</a></span>
+</footer>
+</div>
+<script>
+const input=document.getElementById("pubkey-input"),result=document.getElementById("result");
+let timer;
+input.addEventListener("input",()=>{clearTimeout(timer);const v=input.value.trim();if(!v){result.innerHTML="";return}
+timer=setTimeout(()=>{fetch("/score?pubkey="+encodeURIComponent(v)).then(r=>r.json()).then(d=>{
+if(d.error){result.innerHTML='<div class="score-card" style="color:#f87171">'+d.error+'</div>';return}
+result.innerHTML='<div class="score-card"><div class="score-big">'+d.score+'/100</div><div style="color:#888;margin-top:.5rem">'+d.pubkey.slice(0,16)+'...</div></div>';
+}).catch(()=>{result.innerHTML='<div class="score-card" style="color:#f87171">Error fetching score</div>'})},400)});
+</script>
+</body>
+</html>`
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -833,6 +933,17 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
+			return
+		}
+		// Serve HTML for browsers, JSON for API clients
+		accept := r.Header.Get("Accept")
+		if strings.Contains(accept, "text/html") {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			stats := graph.Stats()
+			fmt.Fprintf(w, landingPageHTML,
+				stats.Nodes, stats.Edges, events.EventCount(),
+				events.AddressableCount(), external.Count(),
+				time.Since(startTime).Truncate(time.Second))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
