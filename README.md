@@ -66,6 +66,7 @@ GET /trust-path?from=<hex>&to=<hex> — Multi-hop trust path analysis (multiple 
 GET /reputation?pubkey=<hex> — Composite reputation score (0-100, grade A-F, 5 dimensions)
 GET /predict?source=<hex>&target=<hex> — Link prediction (5 graph signals, prediction score, mutual connections)
 GET /influence?pubkey=<hex>&other=<hex> — Influence propagation (differential PageRank what-if analysis)
+GET /network-health          — Network topology health (degree stats, connectivity, Gini, hubs, health score)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -685,7 +686,7 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | `/score`, `/decay`, `/nip05` | 1 sat |
 | `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam`, `/blocked` | 2 sats |
 | `/weboftrust`, `/anomalies`, `/sybil`, `/predict` | 3 sats |
-| `/audit`, `/nip05/batch`, `/trust-path`, `/reputation`, `/influence` | 5 sats |
+| `/audit`, `/nip05/batch`, `/trust-path`, `/reputation`, `/influence`, `/network-health` | 5 sats |
 | `/batch`, `/spam/batch`, `/sybil/batch` | 10 sats |
 
 All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`, `/swagger`, `/openapi.json`) are free and unlimited.

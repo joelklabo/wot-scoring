@@ -2559,6 +2559,55 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== NETWORK HEALTH ===== -->
+<h2 id="network-health">Network Health</h2>
+<p class="section-intro">Graph topology analysis and overall network health assessment.</p>
+
+<div class="endpoint-card" id="ep-network-health">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/network-health</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Comprehensive network topology health analysis. Computes degree distribution, connectivity (weakly connected components), reciprocity (mutual follows), Gini coefficient of score centralization, power-law exponent, and top network hubs. Returns an overall health score (0-100) and classification.</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "graph_size": 51319,
+  "edge_count": 3847201,
+  "density": 0.001461,
+  "reciprocity": 0.237,
+  "connectivity": {
+    "largest_component_size": 48932,
+    "largest_component_percent": 95.35,
+    "component_count": 847,
+    "isolated_nodes": 312
+  },
+  "degree_stats": {
+    "mean_in_degree": 74.97,
+    "mean_out_degree": 74.97,
+    "median_in_degree": 12,
+    "median_out_degree": 23,
+    "max_in_degree": 18432,
+    "max_out_degree": 5291,
+    "power_law_alpha": 2.31
+  },
+  "score_distribution": {
+    "gini_coefficient": 0.72,
+    "top_1_percent_share": 38.4,
+    "top_10_percent_share": 78.2,
+    "median_score": 5,
+    "centralization": "centralized"
+  },
+  "top_hubs": [
+    {"pubkey": "32e1827635...", "in_degree": 18432, "out_degree": 842, "score": 98}
+  ],
+  "classification": "good",
+  "health_score": 68
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -3039,6 +3088,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/sybil?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Sybil resistance scoring (0-100, multi-signal analysis)</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/influence?pubkey=&lt;hex|npub&gt;&amp;other=&lt;hex|npub&gt;</span><span class="desc">— Influence propagation: what-if analysis for follows/unfollows</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/network-health</span><span class="desc">— Network topology health: degree distribution, connectivity, Gini, hubs</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -3050,7 +3100,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil, /predict</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence, /network-health</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -3603,6 +3653,7 @@ func main() {
 	http.HandleFunc("/reputation", handleReputation)
 	http.HandleFunc("/predict", handlePredict)
 	http.HandleFunc("/influence", handleInfluence)
+	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

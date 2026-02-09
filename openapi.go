@@ -697,6 +697,19 @@ const openAPISpec = `{
         }
       }
     },
+    "/network-health": {
+      "get": {
+        "tags": ["Network Analysis"],
+        "operationId": "getNetworkHealth",
+        "summary": "Comprehensive network topology health analysis",
+        "description": "Computes graph-theoretic health metrics: degree distribution, connectivity, reciprocity, Gini coefficient of score centralization, power-law exponent, and top hubs. Returns an overall health score (0-100) and classification.",
+        "responses": {
+          "200": {"description": "Network health metrics including connectivity, degree stats, score distribution, top hubs, and health classification"},
+          "402": {"description": "L402 payment required (5 sats)"},
+          "503": {"description": "Graph not built yet"}
+        }
+      }
+    },
     "/docs": {
       "get": {
         "tags": ["Infrastructure"],
