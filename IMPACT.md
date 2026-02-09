@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 36 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) for automated integration.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 32 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 36 endpoints serve live data. 232 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, and OpenAPI spec validation tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 32 endpoints serve live data. 233 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -83,8 +83,9 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 232 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, topics, activity hours, reports, API handlers, API documentation, and OpenAPI spec validation
-- Interactive API documentation at `/docs` with 27 endpoint cards, request/response examples, and live "Try it" buttons
+- 233 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, topics, activity hours, reports, API handlers, API documentation, OpenAPI spec validation, and Swagger UI
+- Interactive API documentation at `/docs` with endpoint cards, request/response examples, and live "Try it" buttons
+- [Swagger UI API explorer](https://wot.klabo.world/swagger) at `/swagger` — interactive testing of all 32 endpoints directly in the browser
 - Machine-readable [OpenAPI 3.0.3 spec](https://wot.klabo.world/openapi.json) at `/openapi.json` — enables automated client generation, Swagger UI integration, Postman import, and MCP agent discovery
 - This impact statement and technical architecture documented in the repository
 
