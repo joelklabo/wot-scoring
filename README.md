@@ -1,5 +1,7 @@
 # WoT Scoring — Nostr Web of Trust
 
+**Live:** [wot.klabo.world](https://wot.klabo.world)
+
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
 NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, and publishes kind 30382/30383/30384/30385 events to relays. Auto re-crawls every 6 hours.
@@ -18,6 +20,8 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 9. Re-crawls automatically every 6 hours
 
 ## API
+
+Live at https://wot.klabo.world — try any endpoint below.
 
 ```
 GET /                        — Service info and endpoint list
