@@ -81,6 +81,30 @@ func TestDemo_ContainsVisualizationComponents(t *testing.T) {
 	}
 }
 
+func TestDemo_HasInfluenceSimulation(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "influenceCard") {
+		t.Error("expected influence simulation card")
+	}
+	if !strings.Contains(body, "runSimulation") {
+		t.Error("expected runSimulation function")
+	}
+	if !strings.Contains(body, "Simulate Unfollow") {
+		t.Error("expected simulate unfollow button")
+	}
+	if !strings.Contains(body, "/influence?pubkey=") {
+		t.Error("expected influence endpoint call in simulation")
+	}
+	if !strings.Contains(body, "Nodes Affected") {
+		t.Error("expected affected nodes display")
+	}
+}
+
 func TestDemo_HasResponsiveLayout(t *testing.T) {
 	req := httptest.NewRequest("GET", "/demo", nil)
 	rr := httptest.NewRecorder()

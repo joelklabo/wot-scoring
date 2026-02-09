@@ -170,6 +170,60 @@ const demoPageHTML = `<!DOCTYPE html>
   .member .pk { font-family: monospace; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .member .score { font-weight: 600; width: 3ch; text-align: right; }
 
+  /* Influence Simulation */
+  .sim-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .sim-row input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: monospace;
+    outline: none;
+  }
+  .sim-row input:focus { border-color: var(--accent); }
+  .sim-row button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--purple);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .sim-row button:hover { opacity: 0.9; }
+  .sim-row button:disabled { opacity: 0.5; cursor: wait; }
+  .sim-result { display: none; }
+  .sim-result.visible { display: block; }
+  .sim-stats { display: flex; gap: 1.2rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+  .sim-stat { text-align: center; }
+  .sim-stat .num { font-size: 1.5rem; font-weight: 700; }
+  .sim-stat .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+  .sim-affected { max-height: 200px; overflow-y: auto; }
+  .sim-affected .aff {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .sim-affected .aff:last-child { border-bottom: none; }
+  .aff .pk { font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aff .delta { font-weight: 600; width: 6ch; text-align: right; }
+  .aff .dir { width: 1.5ch; text-align: center; }
+
   /* Footer */
   .footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
   .footer a { color: var(--accent); text-decoration: none; }
@@ -218,6 +272,22 @@ const demoPageHTML = `<!DOCTYPE html>
     <h2>Trust Circle</h2>
     <div id="circleContent"></div>
   </div>
+
+  <div class="card full" id="influenceCard">
+    <h2>Influence Simulation — What If?</h2>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
+      Simulate an unfollow and see how trust scores ripple across the network.
+    </p>
+    <div class="sim-row">
+      <input type="text" id="simTarget" placeholder="Target pubkey to unfollow (npub1... or hex)">
+      <button id="simBtn" onclick="runSimulation()">Simulate Unfollow</button>
+    </div>
+    <div id="simStatus" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+    <div class="sim-result" id="simResult">
+      <div class="sim-stats" id="simStats"></div>
+      <div class="sim-affected" id="simAffected"></div>
+    </div>
+  </div>
 </div>
 
 <div class="footer">
@@ -260,6 +330,7 @@ async function doSearch() {
 
     if (scoreRes.error) throw new Error(scoreRes.error);
 
+    currentPubkey = raw;
     renderScore(scoreRes, influenceRes);
     renderSybil(sybilRes);
     renderReputation(repRes);
@@ -385,6 +456,60 @@ function renderCircle(data) {
 
 function stat(num, label) {
   return '<div class="circle-stat"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
+}
+
+let currentPubkey = '';
+async function runSimulation() {
+  const target = $('#simTarget').value.trim();
+  if (!target || !currentPubkey) return;
+  const simBtn = $('#simBtn');
+  const simStatus = $('#simStatus');
+  const simResult = $('#simResult');
+  simBtn.disabled = true;
+  simStatus.textContent = 'Running PageRank simulation...';
+  simResult.classList.remove('visible');
+
+  try {
+    const base = window.location.origin;
+    const res = await fetch(base + '/influence?pubkey=' + encodeURIComponent(currentPubkey) + '&other=' + encodeURIComponent(target) + '&action=unfollow');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    let statsHtml = '';
+    const ac = data.affected_count || 0;
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--purple)">' + ac.toLocaleString() + '</div><div class="lbl">Nodes Affected</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--accent)">' + (data.summary?.influence_radius || '—') + '</div><div class="lbl">Radius</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--green)">' + (data.summary?.total_positive || 0).toLocaleString() + '</div><div class="lbl">Score Increases</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--red)">' + (data.summary?.total_negative || 0).toLocaleString() + '</div><div class="lbl">Score Decreases</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + (data.summary?.classification || '—') + '</div><div class="lbl">Impact</div></div>';
+    $('#simStats').innerHTML = statsHtml;
+
+    let affHtml = '';
+    const top = data.top_affected || [];
+    top.forEach(a => {
+      const pk = a.pubkey.slice(0, 8) + '...' + a.pubkey.slice(-6);
+      const arrow = a.direction === 'increase' ? '↑' : '↓';
+      const color = a.direction === 'increase' ? 'var(--green)' : 'var(--red)';
+      const d = a.raw_delta ? a.raw_delta.toExponential(1) : '0';
+      affHtml += '<div class="aff">';
+      affHtml += '<span class="dir" style="color:' + color + '">' + arrow + '</span>';
+      affHtml += '<span class="pk">' + pk + '</span>';
+      affHtml += '<span class="delta" style="color:' + color + '">' + d + '</span>';
+      affHtml += '</div>';
+    });
+    if (top.length === 0) {
+      affHtml = '<div style="color:var(--muted);font-size:0.8rem;">No significant changes detected.</div>';
+    }
+    $('#simAffected').innerHTML = affHtml;
+
+    simResult.classList.add('visible');
+    simStatus.textContent = 'Simulation complete — ' + ac.toLocaleString() + ' nodes affected across ' + (data.graph_size || 0).toLocaleString() + ' total.';
+  } catch (e) {
+    simStatus.textContent = 'Error: ' + e.message;
+    simStatus.style.color = 'var(--red)';
+  } finally {
+    simBtn.disabled = false;
+  }
 }
 </script>
 </body>
