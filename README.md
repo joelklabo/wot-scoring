@@ -49,6 +49,14 @@ GET /stats                   — Service stats and graph info
 POST /publish                — Publish NIP-85 kind 30382/30383/30384/30385 + NIP-89 handler to relays
 ```
 
+## Interactive UI
+
+The landing page at [wot.klabo.world](https://wot.klabo.world) includes three interactive tools:
+
+- **Score Lookup** — Enter any npub or hex pubkey to see trust score, followers, posts, reactions, zaps
+- **Compare** — Side-by-side comparison of two pubkeys with relationship badges (mutual follow, shared follows, trusted followers) and bar charts
+- **Trust Path** — BFS shortest-path visualization showing each hop with WoT scores between any two pubkeys
+
 ## Run
 
 ```bash
