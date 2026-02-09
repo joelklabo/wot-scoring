@@ -40,6 +40,8 @@ GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
 GET /external                — Top 50 external identifiers (hashtags, URLs)
 GET /relay?url=<wss://...>   — Relay trust + operator WoT (via trustedrelays.xyz)
+GET /decay?pubkey=<hex>      — Time-decayed trust score (newer follows weigh more)
+GET /decay/top               — Top pubkeys by decay-adjusted score with rank changes
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -490,6 +492,35 @@ curl -X POST https://wot.klabo.world/batch \
 # Personalized trust (is this person trustworthy FROM MY perspective?)
 curl "https://wot.klabo.world/personalized?viewer=MY_PUBKEY&target=THEIR_PUBKEY"
 ```
+
+## Trust Decay Scoring
+
+Time-decayed PageRank that weighs recent follows more heavily than old ones. A follow from last week contributes more to trust than one from two years ago.
+
+```
+GET /decay?pubkey=<hex|npub>&half_life=365
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827...",
+  "decay_score": 88,
+  "static_score": 92,
+  "delta": -4,
+  "half_life_days": 365,
+  "found": true,
+  "follower_count": 12847,
+  "followers_with_time_data": 11234,
+  "oldest_follow": "2022-11-15T08:30:00Z",
+  "newest_follow": "2026-02-08T14:22:00Z"
+}
+```
+
+**Algorithm:** Exponential decay on PageRank edge weights. Each follow's contribution is scaled by `e^(-λ × age_days)` where `λ = ln(2) / half_life_days`. Default half-life: 365 days (a 1-year-old follow has 50% weight). Configurable via `half_life` parameter.
+
+The `/decay/top` endpoint shows how rankings shift when freshness is factored in — who gains rank (recently followed) vs who loses rank (legacy follows fading).
 
 ## Built for
 
