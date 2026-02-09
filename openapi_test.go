@@ -41,7 +41,7 @@ func TestOpenAPIContainsAllEndpoints(t *testing.T) {
 		"/spam", "/spam/batch",
 		"/metadata", "/event", "/external",
 		"/top", "/export", "/relay", "/authorized", "/communities",
-		"/publish", "/providers", "/health", "/docs", "/openapi.json",
+		"/publish", "/providers", "/health", "/docs", "/swagger", "/openapi.json",
 	}
 
 	var spec map[string]interface{}
@@ -79,6 +79,19 @@ func TestOpenAPIHasL402SecurityScheme(t *testing.T) {
 	}
 	if !strings.Contains(body, "X-Payment-Hash") {
 		t.Error("OpenAPI spec missing X-Payment-Hash header reference")
+	}
+}
+
+func TestSwaggerPageServesHTML(t *testing.T) {
+	body := swaggerPageHTML
+	if !strings.Contains(body, "swagger-ui") {
+		t.Error("Swagger page should contain swagger-ui div")
+	}
+	if !strings.Contains(body, "SwaggerUIBundle") {
+		t.Error("Swagger page should load SwaggerUIBundle")
+	}
+	if !strings.Contains(body, "/openapi.json") {
+		t.Error("Swagger page should reference /openapi.json")
 	}
 }
 

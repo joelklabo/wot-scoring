@@ -1857,6 +1857,7 @@ footer a{color:#7c3aed}
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Rate limit:</strong> 100 requests/min per IP.</p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Base URL:</strong> <code style="color:#7c3aed">https://wot.klabo.world</code></p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>OpenAPI Spec:</strong> <a href="/openapi.json" style="color:#7c3aed">GET /openapi.json</a> — machine-readable API specification</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>API Explorer:</strong> <a href="/swagger" style="color:#7c3aed">Swagger UI</a> — interactive API testing in your browser</p>
 </div>
 
 <div class="nav">
@@ -2387,6 +2388,60 @@ res.innerHTML='<div class="code-block" style="color:#f87171">Error: '+e.message+
 </body>
 </html>`
 
+const swaggerPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Explorer — WoT Scoring</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+<style>
+body{margin:0;background:#1a1a2e}
+.topbar{display:none!important}
+.swagger-ui .info{margin:20px 0 10px 0}
+.swagger-ui .info .title{color:#fff}
+.swagger-ui .info .description p{color:#ccc}
+.swagger-ui .scheme-container{background:#111;border-bottom:1px solid #333}
+.swagger-ui .opblock-tag{color:#e0e0e0;border-bottom:1px solid #222}
+.swagger-ui .opblock .opblock-summary-method{font-weight:700}
+.swagger-ui .btn{border-radius:4px}
+.nav-bar{background:#0a0a0a;padding:.75rem 1.5rem;display:flex;gap:1.5rem;align-items:center;border-bottom:1px solid #222}
+.nav-bar a{color:#aaa;text-decoration:none;font-size:.9rem;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.nav-bar a:hover{color:#fff}
+.nav-bar .active{color:#7c3aed;font-weight:600}
+</style>
+</head>
+<body>
+<div class="nav-bar">
+<a href="/">Home</a>
+<a href="/docs">Docs</a>
+<a class="active" href="/swagger">Explorer</a>
+<a href="/openapi.json">OpenAPI</a>
+</div>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+SwaggerUIBundle({
+  url: "/openapi.json",
+  dom_id: "#swagger-ui",
+  deepLinking: true,
+  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+  layout: "BaseLayout",
+  defaultModelsExpandDepth: -1,
+  docExpansion: "list",
+  tryItOutEnabled: true,
+  requestInterceptor: function(req) {
+    // Auto-set base URL for try-it-out
+    if (!req.url.startsWith("http")) {
+      req.url = window.location.origin + req.url;
+    }
+    return req;
+  }
+});
+</script>
+</body>
+</html>`
+
 const landingPageHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2657,6 +2712,7 @@ footer a:hover{text-decoration:underline}
 <footer>
 <span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
 <span><a href="/docs">API Docs</a></span>
+<span><a href="/swagger">API Explorer</a></span>
 <span><a href="/openapi.json">OpenAPI Spec</a></span>
 <span><a href="https://github.com/joelklabo/wot-scoring">Source (MIT)</a></span>
 <span>Operator: <a href="https://njump.me/max@klabo.world">max@klabo.world</a></span>
@@ -3189,6 +3245,10 @@ func main() {
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, docsPageHTML)
+	})
+	http.HandleFunc("/swagger", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, swaggerPageHTML)
 	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

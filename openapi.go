@@ -523,6 +523,17 @@ const openAPISpec = `{
         }
       }
     },
+    "/swagger": {
+      "get": {
+        "tags": ["Infrastructure"],
+        "operationId": "getSwagger",
+        "summary": "Swagger UI API explorer",
+        "description": "Interactive API explorer powered by Swagger UI. Try any endpoint directly in the browser.",
+        "responses": {
+          "200": {"description": "HTML Swagger UI page", "content": {"text/html": {}}}
+        }
+      }
+    },
     "/openapi.json": {
       "get": {
         "tags": ["Infrastructure"],
