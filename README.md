@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
-NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, publishes kind 30382/30383/30384/30385 events to relays, enriches relay data from trustedrelays.xyz with social reputation, and **consumes assertions from external NIP-85 providers** for composite trust scoring. Auto re-crawls every 6 hours.
+NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, publishes kind 30382/30383/30384/30385 events to relays, **consumes kind 10040 provider authorizations**, enriches relay data from trustedrelays.xyz with social reputation, **detects trust communities** via label propagation, and **consumes assertions from external NIP-85 providers** for composite trust scoring. Auto re-crawls every 6 hours.
 
 ## What it does
 
@@ -20,7 +20,9 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 10. Publishes all four NIP-85 assertion kinds to Nostr relays
 11. **Consumes kind 30382 assertions from external NIP-85 providers**
 12. Computes composite trust scores blending internal PageRank with external assertions
-13. Re-crawls automatically every 6 hours
+13. **Consumes kind 10040 provider authorization events** — tracks which users trust which providers
+14. **Detects trust communities** via label propagation over the follow graph
+15. Re-crawls automatically every 6 hours
 
 ## API
 
@@ -42,6 +44,10 @@ GET /external                — Top 50 external identifiers (hashtags, URLs)
 GET /relay?url=<wss://...>   — Relay trust + operator WoT (via trustedrelays.xyz)
 GET /decay?pubkey=<hex>      — Time-decayed trust score (newer follows weigh more)
 GET /decay/top               — Top pubkeys by decay-adjusted score with rank changes
+GET /authorized              — Kind 10040 authorized users (who declared trust in this provider)
+GET /authorized?pubkey=<hex> — Authorizations for a specific provider
+GET /communities             — Top trust communities (label propagation clusters)
+GET /communities?pubkey=<hex>— Community membership and top peers for a pubkey
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -54,6 +60,8 @@ POST /publish                — Publish NIP-85 kind 30382/30383/30384/30385 + N
 The landing page at [wot.klabo.world](https://wot.klabo.world) includes three interactive tools:
 
 - **Score Lookup** — Enter any npub or hex pubkey to see trust score, followers, posts, reactions, zaps
+- **Trust Leaderboard** — Top 10 scored pubkeys with live rank, score, and follower counts
+- **Trust Communities** — Visualize detected trust clusters with member counts and top-ranked members
 - **Compare** — Side-by-side comparison of two pubkeys with relationship badges (mutual follow, shared follows, trusted followers) and bar charts
 - **Trust Path** — BFS shortest-path visualization showing each hop with WoT scores between any two pubkeys
 
