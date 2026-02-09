@@ -105,6 +105,66 @@ func TestDemo_HasInfluenceSimulation(t *testing.T) {
 	}
 }
 
+func TestDemo_HasFollowQuality(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "qualityCard") {
+		t.Error("expected follow quality card")
+	}
+	if !strings.Contains(body, "qualityContent") {
+		t.Error("expected quality content section")
+	}
+	if !strings.Contains(body, "/follow-quality?pubkey=") {
+		t.Error("expected follow-quality endpoint call")
+	}
+	if !strings.Contains(body, "renderQuality") {
+		t.Error("expected renderQuality function")
+	}
+	if !strings.Contains(body, "quality-score") {
+		t.Error("expected quality score CSS class")
+	}
+	if !strings.Contains(body, "quality-cats") {
+		t.Error("expected quality categories CSS class")
+	}
+	if !strings.Contains(body, "suggestions") {
+		t.Error("expected suggestions section")
+	}
+}
+
+func TestDemo_HasTrustCircleCompare(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "compareCard") {
+		t.Error("expected trust circle compare card")
+	}
+	if !strings.Contains(body, "compareTarget") {
+		t.Error("expected compare target input")
+	}
+	if !strings.Contains(body, "runCompare") {
+		t.Error("expected runCompare function")
+	}
+	if !strings.Contains(body, "Compare Circles") {
+		t.Error("expected Compare Circles button")
+	}
+	if !strings.Contains(body, "/trust-circle/compare?pubkey1=") {
+		t.Error("expected trust-circle/compare endpoint call")
+	}
+	if !strings.Contains(body, "Compatibility") {
+		t.Error("expected compatibility display")
+	}
+	if !strings.Contains(body, "Jaccard") {
+		t.Error("expected Jaccard similarity display")
+	}
+}
+
 func TestDemo_HasResponsiveLayout(t *testing.T) {
 	req := httptest.NewRequest("GET", "/demo", nil)
 	rr := httptest.NewRecorder()

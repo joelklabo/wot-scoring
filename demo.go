@@ -224,6 +224,33 @@ const demoPageHTML = `<!DOCTYPE html>
   .aff .delta { font-weight: 600; width: 6ch; text-align: right; }
   .aff .dir { width: 1.5ch; text-align: center; }
 
+  /* Follow Quality */
+  .quality-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+  .quality-score { font-size: 2.2rem; font-weight: 700; }
+  .quality-class { font-size: 0.85rem; color: var(--muted); }
+  .quality-bars { margin-bottom: 0.8rem; }
+  .quality-bar-row { margin-bottom: 0.5rem; }
+  .quality-bar-label { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.15rem; }
+  .quality-bar-label .val { color: var(--muted); }
+  .quality-bar { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .quality-bar .fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .quality-cats { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+  .quality-cat { text-align: center; flex: 1; min-width: 60px; padding: 0.4rem; border-radius: 6px; background: rgba(255,255,255,0.03); }
+  .quality-cat .num { font-size: 1.2rem; font-weight: 700; }
+  .quality-cat .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+  .suggestions { max-height: 120px; overflow-y: auto; }
+  .suggestion { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid var(--border); font-size: 0.75rem; }
+  .suggestion:last-child { border-bottom: none; }
+  .suggestion .pk { font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .suggestion .reason { color: var(--muted); font-size: 0.7rem; }
+
+  /* Compare */
+  .compat-score { font-size: 2.5rem; font-weight: 700; text-align: center; }
+  .compat-class { font-size: 0.85rem; color: var(--muted); text-align: center; margin-top: 0.2rem; margin-bottom: 0.8rem; }
+  .overlap-list { max-height: 200px; overflow-y: auto; }
+  .overlap-section { margin-bottom: 0.8rem; }
+  .overlap-section h3 { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+
   /* Footer */
   .footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
   .footer a { color: var(--accent); text-decoration: none; }
@@ -273,6 +300,27 @@ const demoPageHTML = `<!DOCTYPE html>
     <div id="circleContent"></div>
   </div>
 
+  <div class="card" id="qualityCard">
+    <h2>Follow Quality</h2>
+    <div id="qualityContent"></div>
+  </div>
+
+  <div class="card full" id="compareCard">
+    <h2>Trust Circle Compare</h2>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
+      Compare trust circles with another pubkey to see compatibility and shared connections.
+    </p>
+    <div class="sim-row">
+      <input type="text" id="compareTarget" placeholder="Compare with... (npub1... or hex pubkey)">
+      <button id="compareBtn" onclick="runCompare()" style="background:var(--green);">Compare Circles</button>
+    </div>
+    <div id="compareStatus" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+    <div class="sim-result" id="compareResult">
+      <div class="sim-stats" id="compareStats"></div>
+      <div id="compareDetails"></div>
+    </div>
+  </div>
+
   <div class="card full" id="influenceCard">
     <h2>Influence Simulation — What If?</h2>
     <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
@@ -316,7 +364,7 @@ async function doSearch() {
     const base = window.location.origin;
     const pk = encodeURIComponent(raw);
 
-    const [scoreRes, sybilRes, repRes, circleRes, influenceRes] = await Promise.all([
+    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes] = await Promise.all([
       fetch(base + '/score?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/sybil?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/reputation?pubkey=' + pk).then(r => r.json()),
@@ -325,7 +373,8 @@ async function doSearch() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({pubkeys: [raw]})
-      }).then(r => r.json())
+      }).then(r => r.json()),
+      fetch(base + '/follow-quality?pubkey=' + pk + '&suggestions=5').then(r => r.json())
     ]);
 
     if (scoreRes.error) throw new Error(scoreRes.error);
@@ -335,6 +384,7 @@ async function doSearch() {
     renderSybil(sybilRes);
     renderReputation(repRes);
     renderCircle(circleRes);
+    renderQuality(qualityRes);
 
     dashboard.classList.add('visible');
     status.textContent = '';
@@ -458,7 +508,130 @@ function stat(num, label) {
   return '<div class="circle-stat"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
 }
 
+function qualityColor(score) {
+  if (score >= 75) return 'var(--green)';
+  if (score >= 50) return 'var(--yellow)';
+  if (score >= 25) return 'var(--accent)';
+  return 'var(--red)';
+}
+
+function renderQuality(data) {
+  const qs = data.quality_score ?? 0;
+  const cls = data.classification || '—';
+
+  let html = '<div class="quality-header">';
+  html += '<div class="quality-score" style="color:' + qualityColor(qs) + '">' + qs + '</div>';
+  html += '<div><div style="font-size:0.9rem;font-weight:600;">' + cls + '</div>';
+  html += '<div class="quality-class">' + (data.follow_count || 0) + ' follows analyzed</div></div>';
+  html += '</div>';
+
+  const bd = data.breakdown || {};
+  html += '<div class="quality-bars">';
+  html += qualBar('Avg Trust', bd.avg_trust_score, 100);
+  html += qualBar('Reciprocity', bd.reciprocity * 100, 100);
+  html += qualBar('Diversity', bd.diversity * 100, 100);
+  html += qualBar('Signal Ratio', bd.signal_ratio * 100, 100);
+  html += '</div>';
+
+  const cats = data.categories || {};
+  html += '<div class="quality-cats">';
+  html += '<div class="quality-cat"><div class="num" style="color:var(--green)">' + (cats.strong || 0) + '</div><div class="lbl">Strong</div></div>';
+  html += '<div class="quality-cat"><div class="num" style="color:var(--yellow)">' + (cats.moderate || 0) + '</div><div class="lbl">Moderate</div></div>';
+  html += '<div class="quality-cat"><div class="num" style="color:var(--red)">' + (cats.weak || 0) + '</div><div class="lbl">Weak</div></div>';
+  html += '<div class="quality-cat"><div class="num" style="color:var(--muted)">' + (cats.unknown || 0) + '</div><div class="lbl">Unknown</div></div>';
+  html += '</div>';
+
+  const sugg = data.suggestions || [];
+  if (sugg.length > 0) {
+    html += '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem;">Follows to reconsider:</div>';
+    html += '<div class="suggestions">';
+    sugg.forEach(s => {
+      const pk = s.pubkey.slice(0, 8) + '...' + s.pubkey.slice(-6);
+      html += '<div class="suggestion">';
+      html += '<span class="pk">' + pk + '</span>';
+      html += '<span class="score" style="color:var(--red)">' + s.trust_score + '</span>';
+      html += '<span class="reason">' + s.reason + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  $('#qualityContent').innerHTML = html;
+}
+
+function qualBar(label, value, max) {
+  const pct = Math.min((value / max) * 100, 100).toFixed(0);
+  const color = value >= 60 ? 'var(--green)' : value >= 30 ? 'var(--yellow)' : 'var(--red)';
+  return '<div class="quality-bar-row">' +
+    '<div class="quality-bar-label"><span>' + label + '</span><span class="val">' + (typeof value === 'number' ? value.toFixed(1) : value) + '</span></div>' +
+    '<div class="quality-bar"><div class="fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+    '</div>';
+}
+
 let currentPubkey = '';
+
+async function runCompare() {
+  const target = $('#compareTarget').value.trim();
+  if (!target || !currentPubkey) return;
+  const cmpBtn = $('#compareBtn');
+  const cmpStatus = $('#compareStatus');
+  const cmpResult = $('#compareResult');
+  cmpBtn.disabled = true;
+  cmpStatus.textContent = 'Comparing trust circles...';
+  cmpResult.classList.remove('visible');
+
+  try {
+    const base = window.location.origin;
+    const res = await fetch(base + '/trust-circle/compare?pubkey1=' + encodeURIComponent(currentPubkey) + '&pubkey2=' + encodeURIComponent(target));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const compat = data.compatibility || {};
+    const cScore = compat.score ?? 0;
+    let color = 'var(--green)';
+    if (cScore < 50) color = 'var(--yellow)';
+    if (cScore < 25) color = 'var(--red)';
+
+    let statsHtml = '';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:' + color + '">' + cScore + '</div><div class="lbl">Compatibility</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--accent)">' + (compat.overlap_count || 0) + '</div><div class="lbl">Shared Trusted</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + (data.circle_size_1 || 0) + '</div><div class="lbl">Circle 1</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num">' + (data.circle_size_2 || 0) + '</div><div class="lbl">Circle 2</div></div>';
+    statsHtml += '<div class="sim-stat"><div class="num" style="color:var(--muted)">' + ((compat.overlap_ratio || 0) * 100).toFixed(1) + '%</div><div class="lbl">Jaccard</div></div>';
+    $('#compareStats').innerHTML = statsHtml;
+
+    let detHtml = '';
+    const overlap = data.overlap || [];
+    if (overlap.length > 0) {
+      detHtml += '<div class="overlap-section"><h3>Shared Trusted Connections (' + overlap.length + ')</h3>';
+      detHtml += '<div class="overlap-list">';
+      overlap.slice(0, 15).forEach(m => {
+        const pk = m.pubkey.slice(0, 8) + '...' + m.pubkey.slice(-6);
+        detHtml += '<div class="member">';
+        detHtml += '<span class="pk">' + pk + '</span>';
+        detHtml += '<span class="score" style="color:' + scoreColor(m.trust_score) + '">' + m.trust_score + '</span>';
+        detHtml += '</div>';
+      });
+      if (overlap.length > 15) detHtml += '<div style="font-size:0.75rem;color:var(--muted);padding:0.3rem 0;">+ ' + (overlap.length - 15) + ' more</div>';
+      detHtml += '</div></div>';
+    } else {
+      detHtml += '<div style="color:var(--muted);font-size:0.8rem;">No shared trusted connections found.</div>';
+    }
+
+    const cls = compat.classification || '';
+    detHtml += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">Compatibility: ' + cls + ' — ' + (compat.shared_follows || 0) + ' shared follows (' + ((compat.shared_ratio || 0) * 100).toFixed(1) + '% overlap)</div>';
+
+    $('#compareDetails').innerHTML = detHtml;
+    cmpResult.classList.add('visible');
+    cmpStatus.textContent = 'Comparison complete — ' + (compat.overlap_count || 0) + ' shared trusted connections.';
+  } catch (e) {
+    cmpStatus.textContent = 'Error: ' + e.message;
+    cmpStatus.style.color = 'var(--red)';
+  } finally {
+    cmpBtn.disabled = false;
+  }
+}
+
 async function runSimulation() {
   const target = $('#simTarget').value.trim();
   if (!target || !currentPubkey) return;
