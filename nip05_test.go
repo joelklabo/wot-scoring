@@ -238,6 +238,90 @@ func TestHandleNIP05Batch_InvalidIdentifiers(t *testing.T) {
 	}
 }
 
+func TestHandleNIP05Reverse_MissingPubkey(t *testing.T) {
+	req := httptest.NewRequest("GET", "/nip05/reverse", nil)
+	w := httptest.NewRecorder()
+
+	handleNIP05Reverse(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] == "" {
+		t.Error("expected error message in response")
+	}
+}
+
+func TestHandleNIP05Reverse_ShortPubkey(t *testing.T) {
+	req := httptest.NewRequest("GET", "/nip05/reverse?pubkey=abc123", nil)
+	w := httptest.NewRecorder()
+
+	handleNIP05Reverse(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if !strings.Contains(resp["error"], "64 hex") {
+		t.Errorf("expected '64 hex' in error, got %q", resp["error"])
+	}
+}
+
+func TestHandleNIP05Reverse_InvalidHex(t *testing.T) {
+	// 64 chars but contains non-hex characters
+	invalidPubkey := "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+	req := httptest.NewRequest("GET", "/nip05/reverse?pubkey="+invalidPubkey, nil)
+	w := httptest.NewRecorder()
+
+	handleNIP05Reverse(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if !strings.Contains(resp["error"], "hex") {
+		t.Errorf("expected 'hex' in error, got %q", resp["error"])
+	}
+}
+
+func TestHandleNIP05Reverse_ValidPubkeyNoProfile(t *testing.T) {
+	// Initialize globals
+	graph = NewGraph()
+	meta = NewMetaStore()
+
+	// Valid hex pubkey that won't have a profile on relays in tests
+	pubkey := "0000000000000000000000000000000000000000000000000000000000000001"
+	req := httptest.NewRequest("GET", "/nip05/reverse?pubkey="+pubkey, nil)
+	w := httptest.NewRecorder()
+
+	handleNIP05Reverse(w, req)
+
+	// Should return 200 with error in body (graceful degradation)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if resp["pubkey"] != pubkey {
+		t.Errorf("expected pubkey %q, got %q", pubkey, resp["pubkey"])
+	}
+	if resp["verified"] != false {
+		t.Error("expected verified=false for nonexistent profile")
+	}
+	if resp["error"] == nil {
+		t.Error("expected error field for nonexistent profile")
+	}
+}
+
 func TestNIP05TrustLevel(t *testing.T) {
 	tests := []struct {
 		score    int

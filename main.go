@@ -1904,6 +1904,7 @@ footer a:hover{text-decoration:underline}
 <div class="tab" data-tab="compare">Compare</div>
 <div class="tab" data-tab="path">Trust Path</div>
 <div class="tab" data-tab="nip05">NIP-05 Verify</div>
+<div class="tab" data-tab="nip05reverse">NIP-05 Reverse</div>
 </div>
 
 <div class="tab-content active" id="tab-lookup">
@@ -1939,6 +1940,14 @@ footer a:hover{text-decoration:underline}
 <div class="search">
 <input type="text" id="nip05-input" placeholder="Enter NIP-05 identifier (e.g. user@domain.com)...">
 <div id="nip05-result"></div>
+</div>
+</div>
+
+<div class="tab-content" id="tab-nip05reverse">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Find the NIP-05 identity for a pubkey (reverse lookup). Fetches profile from relays and verifies bidirectionally.</p>
+<div class="search">
+<input type="text" id="nip05reverse-input" placeholder="Enter hex pubkey or npub to find NIP-05 identity...">
+<div id="nip05reverse-result"></div>
 </div>
 </div>
 
@@ -1990,6 +1999,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/health</span><span class="desc">— Health check</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/nip05?id=user@domain</span><span class="desc">— NIP-05 verification + WoT trust profile</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/nip05/batch</span><span class="desc">— Bulk NIP-05 verification (up to 50 identifiers)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/nip05/reverse?pubkey=&lt;hex&gt;</span><span class="desc">— Reverse NIP-05 lookup (pubkey → identity, bidirectional verification)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 </div>
 
@@ -1998,7 +2008,7 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
@@ -2197,6 +2207,43 @@ if(d.nip05_relays&&d.nip05_relays.length){html+='<div style="margin-top:.5rem;fo
 html+='</div>';
 nip05Result.innerHTML=html;
 }).catch(()=>{err(nip05Result,"Error resolving NIP-05 identifier")})},600)});
+
+const nip05revInput=document.getElementById("nip05reverse-input"),nip05revResult=document.getElementById("nip05reverse-result");
+let nip05revTimer;
+nip05revInput.addEventListener("input",()=>{clearTimeout(nip05revTimer);const v=nip05revInput.value.trim();if(!v){nip05revResult.innerHTML="";return}
+if(v.length<63&&!v.startsWith("npub1")){nip05revResult.innerHTML='<div style="color:#888;margin-top:.5rem;font-size:.9rem">Enter a 64-char hex pubkey or npub</div>';return}
+nip05revTimer=setTimeout(()=>{
+nip05revResult.innerHTML='<div style="color:#555;margin-top:.5rem">Looking up NIP-05 from relays...</div>';
+fetch("/nip05/reverse?pubkey="+encodeURIComponent(pk)).then(r=>r.json()).then(d=>{
+const levelColors={"highly_trusted":"#10b981","trusted":"#3b82f6","moderate":"#f59e0b","low":"#f97316","untrusted":"#ef4444","unknown":"#666"};
+let html='<div class="score-card fade-in">';
+if(d.nip05&&d.verified){
+const lc=levelColors[d.trust_level]||"#666";
+html+='<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">';
+html+='<div class="score-big">'+d.score+'/100</div>';
+html+='<span style="background:'+lc+'22;color:'+lc+';padding:.25rem .75rem;border-radius:6px;font-size:.95rem;font-weight:600;border:1px solid '+lc+'44">'+d.trust_level.replace("_"," ")+'</span>';
+html+='</div>';
+html+='<div style="color:#10b981;margin-top:.5rem;font-size:.95rem">&#10003; '+d.nip05+'</div>';
+if(d.display_name){html+='<div style="color:#ccc;font-size:.9rem;margin-top:.25rem">'+d.display_name+'</div>'}
+html+='<div style="color:#888;margin-top:.25rem;font-family:monospace;font-size:.85rem">'+d.pubkey+'</div>';
+html+='<div class="score-details">';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.followers||0)+'</div><div class="score-detail-label">Followers</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.post_count||0)+'</div><div class="score-detail-label">Posts</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reactions||0)+'</div><div class="score-detail-label">Reactions</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reply_count||0)+'</div><div class="score-detail-label">Replies</div></div>';
+html+='</div>';
+if(d.topics&&d.topics.length){html+='<div style="margin-top:.75rem"><span style="color:#888;font-size:.85rem">Topics: </span>';d.topics.forEach(t=>{html+='<span style="background:#1a1a2e;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:.8rem;margin:2px">'+t+'</span>'});html+='</div>'}
+}else{
+html+='<div style="color:#f97316;margin-top:.5rem">&#10007; No verified NIP-05 found</div>';
+if(d.display_name){html+='<div style="color:#ccc;font-size:.9rem;margin-top:.25rem">'+d.display_name+'</div>'}
+html+='<div style="color:#888;margin-top:.25rem;font-family:monospace;font-size:.85rem">'+d.pubkey+'</div>';
+if(d.nip05){html+='<div style="color:#888;font-size:.85rem;margin-top:.25rem">Claimed: '+d.nip05+' (verification failed)</div>'}
+if(d.error){html+='<div style="color:#666;font-size:.85rem;margin-top:.25rem">'+d.error+'</div>'}
+html+='<div style="color:#888;font-size:.9rem;margin-top:.5rem">Score: '+(d.score||0)+'/100</div>';
+}
+html+='</div>';
+nip05revResult.innerHTML=html;
+}).catch(()=>{err(nip05revResult,"Error looking up NIP-05")})},800)});
 </script>
 </body>
 </html>`
@@ -2348,6 +2395,7 @@ func main() {
 	http.HandleFunc("/communities", handleCommunities)
 	http.HandleFunc("/nip05", handleNIP05)
 	http.HandleFunc("/nip05/batch", handleNIP05Batch)
+	http.HandleFunc("/nip05/reverse", handleNIP05Reverse)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -2389,6 +2437,7 @@ POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["h
 /communities?pubkey=<hex> — Community membership and peers for a pubkey
 /nip05?id=user@domain — NIP-05 verification + WoT trust profile (resolves NIP-05 to pubkey, returns trust score)
 POST /nip05/batch — Bulk NIP-05 verification (up to 50 identifiers, concurrent resolution)
+/nip05/reverse?pubkey=<hex> — Reverse NIP-05 lookup (find NIP-05 identity from pubkey, verify bidirectionally)
 /providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
