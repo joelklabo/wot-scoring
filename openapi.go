@@ -48,7 +48,9 @@ const openAPISpec = `{
     {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"},
     {"name": "Trust Paths", "description": "Multi-hop trust path analysis with scoring and diversity metrics"},
     {"name": "Reputation", "description": "Composite reputation scoring combining WoT, Sybil resistance, community, and anomaly analysis"},
-    {"name": "Link Prediction", "description": "Graph-theoretic link prediction for follow relationship likelihood"}
+    {"name": "Link Prediction", "description": "Graph-theoretic link prediction for follow relationship likelihood"},
+    {"name": "Real-Time", "description": "WebSocket streaming for live score updates"},
+    {"name": "Network Analysis", "description": "Graph topology health metrics and network-wide analysis"}
   ],
   "paths": {
     "/score": {
@@ -707,6 +709,18 @@ const openAPISpec = `{
           "200": {"description": "Network health metrics including connectivity, degree stats, score distribution, top hubs, and health classification"},
           "402": {"description": "L402 payment required (5 sats)"},
           "503": {"description": "Graph not built yet"}
+        }
+      }
+    },
+    "/ws/scores": {
+      "get": {
+        "tags": ["Real-Time"],
+        "operationId": "wsScores",
+        "summary": "Real-time score streaming via WebSocket",
+        "description": "WebSocket endpoint for live score updates. Connect, subscribe to pubkeys, receive current scores immediately then updates after each graph recomputation (~6h). Protocol: send {type:subscribe,pubkeys:[...]} to watch up to 100 pubkeys. Without WebSocket upgrade, returns endpoint documentation as JSON.",
+        "responses": {
+          "101": {"description": "WebSocket upgrade successful"},
+          "200": {"description": "Endpoint documentation (non-WebSocket request)"}
         }
       }
     },

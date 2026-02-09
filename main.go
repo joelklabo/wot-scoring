@@ -250,6 +250,7 @@ var externalAssertions = NewAssertionStore()
 var authStore = NewAuthStore()
 var muteStore = NewMuteStore()
 var communities = NewCommunityDetector()
+var wsHub = NewWSHub(graph)
 var startTime = time.Now()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
@@ -2608,6 +2609,43 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== REAL-TIME ===== -->
+<h2 id="realtime">Real-Time Streaming</h2>
+<p class="section-intro">WebSocket endpoint for live score updates pushed after each graph recomputation.</p>
+
+<div class="endpoint-card" id="ep-ws-scores">
+<div class="endpoint-header">
+<span class="method" style="background:#7c3aed">WS</span>
+<span class="path">/ws/scores</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Subscribe to real-time score updates for specific pubkeys. After connecting, send a subscribe message with pubkeys to watch. You'll receive current scores immediately, then updated scores after each graph recomputation (~6 hours).</div>
+<div class="example">
+<div class="example-title">Subscribe Message</div>
+<div class="code-block">{"type":"subscribe","pubkeys":["<hex_or_npub>"]}</div>
+</div>
+<div class="example">
+<div class="example-title">Score Response</div>
+<div class="code-block">{
+  "type": "scores",
+  "scores": [
+    {
+      "pubkey": "82341f...",
+      "score": 87,
+      "raw_score": 0.00234,
+      "percentile": 0.9812,
+      "rank": 42
+    }
+  ],
+  "stats": {
+    "nodes": 51319,
+    "edges": 3847201,
+    "updated_at": "2026-02-09T12:00:00Z"
+  }
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -3089,6 +3127,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/influence?pubkey=&lt;hex|npub&gt;&amp;other=&lt;hex|npub&gt;</span><span class="desc">— Influence propagation: what-if analysis for follows/unfollows</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/network-health</span><span class="desc">— Network topology health: degree distribution, connectivity, Gini, hubs</span></div>
+<div class="endpoint"><span class="method">WS</span><span class="path">/ws/scores</span><span class="desc">— Real-time score streaming via WebSocket (subscribe to pubkey updates)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -3557,6 +3596,9 @@ func main() {
 		// Auto-publish NIP-85 events after initial crawl
 		autoPublish(ctx)
 
+		// Push initial scores to any WebSocket subscribers
+		wsHub.BroadcastScoreUpdate()
+
 		// Schedule periodic re-crawl + auto-publish every 6 hours
 		go func() {
 			ticker := time.NewTicker(6 * time.Hour)
@@ -3580,6 +3622,9 @@ func main() {
 					externalAssertions.TotalAssertions(), authStore.TotalAuthorizations(), muteStore.TotalMuters(), communities.TotalCommunities())
 
 				autoPublish(ctx)
+
+				// Push updated scores to WebSocket subscribers
+				wsHub.BroadcastScoreUpdate()
 			}
 		}()
 	}()
@@ -3654,6 +3699,7 @@ func main() {
 	http.HandleFunc("/predict", handlePredict)
 	http.HandleFunc("/influence", handleInfluence)
 	http.HandleFunc("/network-health", handleNetworkHealth)
+	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
