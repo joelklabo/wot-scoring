@@ -24,6 +24,8 @@ type ExternalAssertion struct {
 type ProviderInfo struct {
 	Pubkey       string    `json:"pubkey"`
 	AssertionCnt int       `json:"assertion_count"`
+	MinRank      int       `json:"min_rank"`
+	MaxRank      int       `json:"max_rank"`
 	LastSeen     time.Time `json:"last_seen"`
 }
 
@@ -60,10 +62,18 @@ func (s *AssertionStore) Add(a *ExternalAssertion) {
 
 	s.assertions[a.SubjectPubkey][a.ProviderPubkey] = a
 
-	if s.providers[a.ProviderPubkey] == nil {
-		s.providers[a.ProviderPubkey] = &ProviderInfo{Pubkey: a.ProviderPubkey}
+	p := s.providers[a.ProviderPubkey]
+	if p == nil {
+		p = &ProviderInfo{Pubkey: a.ProviderPubkey, MinRank: a.Rank, MaxRank: a.Rank}
+		s.providers[a.ProviderPubkey] = p
 	}
-	s.providers[a.ProviderPubkey].LastSeen = time.Now()
+	p.LastSeen = time.Now()
+	if a.Rank < p.MinRank {
+		p.MinRank = a.Rank
+	}
+	if a.Rank > p.MaxRank {
+		p.MaxRank = a.Rank
+	}
 	// Recount assertions for this provider
 	count := 0
 	for _, byProvider := range s.assertions {
@@ -71,7 +81,7 @@ func (s *AssertionStore) Add(a *ExternalAssertion) {
 			count++
 		}
 	}
-	s.providers[a.ProviderPubkey].AssertionCnt = count
+	p.AssertionCnt = count
 }
 
 // GetForSubject returns all external assertions for a given subject pubkey.
@@ -120,6 +130,45 @@ func (s *AssertionStore) ProviderCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.providers)
+}
+
+// GetProvider returns provider info by pubkey, or nil if unknown.
+func (s *AssertionStore) GetProvider(pubkey string) *ProviderInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.providers[pubkey]
+}
+
+// NormalizeRank converts a raw rank from a provider to the 0-100 scale.
+// If the provider already uses 0-100 (max rank <= 100), the rank is returned as-is.
+// Otherwise, the rank is linearly scaled using the provider's observed min/max range.
+func NormalizeRank(rank int, provider *ProviderInfo) int {
+	if provider == nil || provider.MaxRank <= 100 {
+		// Provider appears to use 0-100 scale already
+		if rank > 100 {
+			return 100
+		}
+		if rank < 0 {
+			return 0
+		}
+		return rank
+	}
+
+	// Provider uses a different scale — normalize to 0-100
+	spread := provider.MaxRank - provider.MinRank
+	if spread == 0 {
+		// All ranks identical; treat as midpoint
+		return 50
+	}
+
+	normalized := float64(rank-provider.MinRank) / float64(spread) * 100
+	if normalized > 100 {
+		normalized = 100
+	}
+	if normalized < 0 {
+		normalized = 0
+	}
+	return int(normalized)
 }
 
 // consumeExternalAssertions subscribes to kind 30382 events on relays from other providers.
@@ -195,31 +244,35 @@ func parseAssertion(ev *nostr.Event) *ExternalAssertion {
 }
 
 // CompositeScore blends our internal score with external assertions.
+// It normalizes each provider's rank to 0-100 using their observed scale.
 // Returns the composite score and a breakdown of sources.
-func CompositeScore(internalScore int, externalAssertions []*ExternalAssertion) (int, []map[string]interface{}) {
+func CompositeScore(internalScore int, externalAssertions []*ExternalAssertion, store *AssertionStore) (int, []map[string]interface{}) {
 	if len(externalAssertions) == 0 {
 		return internalScore, nil
 	}
 
-	// Weight: 70% internal, 30% external average
-	externalSum := 0
-	for _, a := range externalAssertions {
-		externalSum += a.Rank
+	// Weight: 70% internal, 30% external average (normalized to 0-100)
+	normalizedSum := 0
+	sources := make([]map[string]interface{}, len(externalAssertions))
+	for i, a := range externalAssertions {
+		var provider *ProviderInfo
+		if store != nil {
+			provider = store.GetProvider(a.ProviderPubkey)
+		}
+		norm := NormalizeRank(a.Rank, provider)
+		normalizedSum += norm
+		sources[i] = map[string]interface{}{
+			"provider":        a.ProviderPubkey,
+			"raw_rank":        a.Rank,
+			"normalized_rank": norm,
+			"age":             fmt.Sprintf("%ds", time.Now().Unix()-a.CreatedAt),
+		}
 	}
-	externalAvg := float64(externalSum) / float64(len(externalAssertions))
+	externalAvg := float64(normalizedSum) / float64(len(externalAssertions))
 
 	composite := int(float64(internalScore)*0.7 + externalAvg*0.3)
 	if composite > 100 {
 		composite = 100
-	}
-
-	sources := make([]map[string]interface{}, len(externalAssertions))
-	for i, a := range externalAssertions {
-		sources[i] = map[string]interface{}{
-			"provider": a.ProviderPubkey,
-			"rank":     a.Rank,
-			"age":      fmt.Sprintf("%ds", time.Now().Unix()-a.CreatedAt),
-		}
 	}
 
 	return composite, sources

@@ -250,7 +250,7 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 
 	internalScore := normalizeScore(score, stats.Nodes)
 	extAssertions := externalAssertions.GetForSubject(pubkey)
-	compositeScore, extSources := CompositeScore(internalScore, extAssertions)
+	compositeScore, extSources := CompositeScore(internalScore, extAssertions, externalAssertions)
 
 	resp := map[string]interface{}{
 		"pubkey":     pubkey,

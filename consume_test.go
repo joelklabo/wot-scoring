@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -160,7 +161,7 @@ func TestParseAssertionMissingDTag(t *testing.T) {
 }
 
 func TestCompositeScoreNoExternal(t *testing.T) {
-	score, sources := CompositeScore(80, nil)
+	score, sources := CompositeScore(80, nil, nil)
 	if score != 80 {
 		t.Errorf("expected 80 with no external, got %d", score)
 	}
@@ -175,9 +176,10 @@ func TestCompositeScoreWithExternal(t *testing.T) {
 		{ProviderPubkey: "p2", Rank: 70, CreatedAt: time.Now().Unix()},
 	}
 
+	// With nil store, providers use 0-100 scale (rank <= 100)
 	// internal=80, external avg=(90+70)/2=80
 	// composite = 80*0.7 + 80*0.3 = 56 + 24 = 80
-	score, sources := CompositeScore(80, externals)
+	score, sources := CompositeScore(80, externals, nil)
 	if score != 80 {
 		t.Errorf("expected 80, got %d", score)
 	}
@@ -193,9 +195,139 @@ func TestCompositeScoreBlending(t *testing.T) {
 
 	// internal=50, external avg=100
 	// composite = 50*0.7 + 100*0.3 = 35 + 30 = 65
-	score, _ := CompositeScore(50, externals)
+	score, _ := CompositeScore(50, externals, nil)
 	if score != 65 {
 		t.Errorf("expected 65, got %d", score)
+	}
+}
+
+func TestCompositeScoreNormalizesLargeRanks(t *testing.T) {
+	store := NewAssertionStore()
+
+	// Simulate a provider that uses raw scores (0-263237 range)
+	for i := 0; i < 10; i++ {
+		store.Add(&ExternalAssertion{
+			ProviderPubkey: "bigscale",
+			SubjectPubkey:  fmt.Sprintf("subject%d", i),
+			Rank:           i * 26323,
+			CreatedAt:      time.Now().Unix(),
+		})
+	}
+
+	externals := []*ExternalAssertion{
+		{ProviderPubkey: "bigscale", Rank: 263237, CreatedAt: time.Now().Unix()},
+	}
+
+	// Rank 263237 with max 236907 should normalize to ~100
+	// internal=50, normalized external=~100
+	// composite = 50*0.7 + ~100*0.3 = 35 + 30 = 65
+	score, sources := CompositeScore(50, externals, store)
+	if score < 60 || score > 70 {
+		t.Errorf("expected ~65 after normalization, got %d", score)
+	}
+	if sources[0]["normalized_rank"].(int) < 90 {
+		t.Errorf("expected normalized_rank >= 90 for max provider value, got %v", sources[0]["normalized_rank"])
+	}
+}
+
+func TestNormalizeRank(t *testing.T) {
+	tests := []struct {
+		name     string
+		rank     int
+		provider *ProviderInfo
+		want     int
+	}{
+		{
+			name:     "nil provider, normal rank",
+			rank:     75,
+			provider: nil,
+			want:     75,
+		},
+		{
+			name:     "nil provider, oversized rank clamped",
+			rank:     150,
+			provider: nil,
+			want:     100,
+		},
+		{
+			name:     "0-100 scale provider unchanged",
+			rank:     42,
+			provider: &ProviderInfo{MinRank: 0, MaxRank: 100},
+			want:     42,
+		},
+		{
+			name:     "large scale provider, max value",
+			rank:     500000,
+			provider: &ProviderInfo{MinRank: 0, MaxRank: 500000},
+			want:     100,
+		},
+		{
+			name:     "large scale provider, mid value",
+			rank:     250000,
+			provider: &ProviderInfo{MinRank: 0, MaxRank: 500000},
+			want:     50,
+		},
+		{
+			name:     "large scale provider, min value",
+			rank:     0,
+			provider: &ProviderInfo{MinRank: 0, MaxRank: 500000},
+			want:     0,
+		},
+		{
+			name:     "large scale with nonzero min",
+			rank:     150,
+			provider: &ProviderInfo{MinRank: 100, MaxRank: 300},
+			want:     25,
+		},
+		{
+			name:     "identical min max returns 50",
+			rank:     263237,
+			provider: &ProviderInfo{MinRank: 263237, MaxRank: 263237},
+			want:     50,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeRank(tt.rank, tt.provider)
+			if got != tt.want {
+				t.Errorf("NormalizeRank(%d) = %d, want %d", tt.rank, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProviderMinMaxTracking(t *testing.T) {
+	store := NewAssertionStore()
+
+	store.Add(&ExternalAssertion{
+		ProviderPubkey: "p1",
+		SubjectPubkey:  "s1",
+		Rank:           500,
+		CreatedAt:      time.Now().Unix(),
+	})
+	store.Add(&ExternalAssertion{
+		ProviderPubkey: "p1",
+		SubjectPubkey:  "s2",
+		Rank:           100000,
+		CreatedAt:      time.Now().Unix(),
+	})
+	store.Add(&ExternalAssertion{
+		ProviderPubkey: "p1",
+		SubjectPubkey:  "s3",
+		Rank:           50,
+		CreatedAt:      time.Now().Unix(),
+	})
+
+	p := store.GetProvider("p1")
+	if p == nil {
+		t.Fatal("expected provider p1")
+	}
+	if p.MinRank != 50 {
+		t.Errorf("expected MinRank 50, got %d", p.MinRank)
+	}
+	if p.MaxRank != 100000 {
+		t.Errorf("expected MaxRank 100000, got %d", p.MaxRank)
 	}
 }
 
