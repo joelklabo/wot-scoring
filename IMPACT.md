@@ -18,7 +18,7 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 25+ endpoints serve live data. 160 automated tests pass in CI (including L402 paywall, community detection, and authorization tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 25+ endpoints serve live data. 164 automated tests pass in CI (including L402 paywall, community detection, and authorization tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -41,6 +41,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Trust comparison** (`/compare`) — side-by-side comparison showing direct relationship, shared follows, Jaccard similarity, and trust path.
 - **Community detection** (`/communities`) — label propagation algorithm identifies trust communities within the follow graph, revealing organic clusters of related users.
 - **Authorization tracking** (`/authorized`) — consumes kind 10040 events from relays, showing which users have explicitly authorized specific NIP-85 scoring providers.
+- **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
 
@@ -70,7 +71,7 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 160 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, and API handlers
+- 164 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, topics, activity hours, reports, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability

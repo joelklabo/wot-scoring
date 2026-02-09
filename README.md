@@ -120,6 +120,13 @@ Each kind 30382 event includes these standard NIP-85 tags:
 | `zap_amt_sent` | Sats sent via zap receipts |
 | `zap_cnt_sent` | Number of zaps sent |
 | `first_created_at` | Earliest known event timestamp |
+| `zap_avg_amt_day_recd` | Average daily sats received |
+| `zap_avg_amt_day_sent` | Average daily sats sent |
+| `t` | Common topics/hashtags (up to 5) |
+| `active_hours_start` | Peak activity window start (UTC hour, 0-23) |
+| `active_hours_end` | Peak activity window end (UTC hour, 0-23) |
+| `reports_cnt_recd` | Kind 1984 reports received |
+| `reports_cnt_sent` | Kind 1984 reports sent |
 
 ## Kind 30383 Tags (Event Assertions)
 

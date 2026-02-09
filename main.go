@@ -333,6 +333,22 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 		"zap_count":     m.ZapCntRecd,
 	}
 
+	// NIP-85 extended metadata
+	if topics := m.TopTopics(5); len(topics) > 0 {
+		resp["topics"] = topics
+	}
+	activeStart, activeEnd := m.ActiveHours()
+	if activeStart != activeEnd {
+		resp["active_hours_start"] = activeStart
+		resp["active_hours_end"] = activeEnd
+	}
+	if m.ReportsRecd > 0 {
+		resp["reports_received"] = m.ReportsRecd
+	}
+	if m.ReportsSent > 0 {
+		resp["reports_sent"] = m.ReportsSent
+	}
+
 	if len(extSources) > 0 {
 		resp["composite_score"] = compositeScore
 		resp["external_assertions"] = extSources
@@ -1362,6 +1378,33 @@ func publishNIP85(ctx context.Context, topN int) (int, error) {
 		}
 		if m.FirstCreated > 0 {
 			tags = append(tags, nostr.Tag{"first_created_at", fmt.Sprintf("%d", m.FirstCreated)})
+
+			// Compute avg daily zap amounts
+			daysSinceFirst := float64(time.Now().Unix()-m.FirstCreated) / 86400.0
+			if daysSinceFirst > 1 {
+				tags = append(tags, nostr.Tag{"zap_avg_amt_day_recd", fmt.Sprintf("%d", int64(float64(m.ZapAmtRecd)/daysSinceFirst))})
+				tags = append(tags, nostr.Tag{"zap_avg_amt_day_sent", fmt.Sprintf("%d", int64(float64(m.ZapAmtSent)/daysSinceFirst))})
+			}
+		}
+
+		// Active hours
+		activeStart, activeEnd := m.ActiveHours()
+		if activeStart != activeEnd {
+			tags = append(tags, nostr.Tag{"active_hours_start", fmt.Sprintf("%d", activeStart)})
+			tags = append(tags, nostr.Tag{"active_hours_end", fmt.Sprintf("%d", activeEnd)})
+		}
+
+		// Reports
+		if m.ReportsRecd > 0 {
+			tags = append(tags, nostr.Tag{"reports_cnt_recd", fmt.Sprintf("%d", m.ReportsRecd)})
+		}
+		if m.ReportsSent > 0 {
+			tags = append(tags, nostr.Tag{"reports_cnt_sent", fmt.Sprintf("%d", m.ReportsSent)})
+		}
+
+		// Top topics (up to 5 hashtags)
+		for _, topic := range m.TopTopics(5) {
+			tags = append(tags, nostr.Tag{"t", topic})
 		}
 
 		ev := nostr.Event{
@@ -1905,7 +1948,7 @@ footer a:hover{text-decoration:underline}
 <div class="nip85">
 <h2>NIP-85 Event Kinds</h2>
 <div class="kind"><span class="kind-num">10040</span><span class="kind-desc">Provider Authorization — users declare trust in this service for WoT calculations</span></div>
-<div class="kind"><span class="kind-num">30382</span><span class="kind-desc">User Trust Assertions — PageRank score, follower count, post/reply/reaction/zap stats</span></div>
+<div class="kind"><span class="kind-num">30382</span><span class="kind-desc">User Trust Assertions — PageRank score, follower count, post/reply/reaction/zap stats, topics, active hours, reports</span></div>
 <div class="kind"><span class="kind-num">30383</span><span class="kind-desc">Event Assertions — engagement scores for individual notes (comments, reposts, reactions, zaps)</span></div>
 <div class="kind"><span class="kind-num">30384</span><span class="kind-desc">Addressable Event Assertions — scores for articles (kind 30023) and live activities (kind 30311)</span></div>
 <div class="kind"><span class="kind-num">30385</span><span class="kind-desc">External Identifier Assertions — scores for hashtags and URLs (NIP-73)</span></div>
@@ -1984,7 +2027,11 @@ html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reactio
 html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.zap_amount||0)+'</div><div class="score-detail-label">Sats Received</div></div>';
 html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.zap_count||0)+'</div><div class="score-detail-label">Zaps</div></div>';
 html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reply_count||0)+'</div><div class="score-detail-label">Replies</div></div>';
-html+='</div></div>';
+html+='</div>';
+if(d.topics&&d.topics.length){html+='<div style="margin-top:.75rem"><span style="color:#888;font-size:.85rem">Topics: </span>';d.topics.forEach(t=>{html+='<span style="background:#1a1a2e;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:.8rem;margin:2px">'+t+'</span>'});html+='</div>'}
+if(d.active_hours_start!==undefined){html+='<div style="color:#888;font-size:.85rem;margin-top:.5rem">Active: '+d.active_hours_start+':00–'+d.active_hours_end+':00 UTC</div>'}
+if(d.reports_received){html+='<div style="color:#e74c3c;font-size:.85rem;margin-top:.25rem">Reports received: '+d.reports_received+'</div>'}
+html+='</div>';
 result.innerHTML=html;
 }).catch(()=>{err(result,"Error fetching score")})},400)});
 

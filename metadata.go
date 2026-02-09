@@ -4,23 +4,29 @@ import (
 	"context"
 	"log"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/nbd-wtf/go-nostr"
 )
 
 // PubkeyMeta holds NIP-85 metadata collected for a single pubkey.
 type PubkeyMeta struct {
-	Followers    int   // number of kind 3 lists that include this pubkey
-	PostCount    int   // kind 1 notes (not replies)
-	ReplyCount   int   // kind 1 notes that are replies (have "e" tag)
-	ReactionsSent int  // kind 7 reactions sent by this pubkey
-	ReactionsRecd int  // kind 7 reactions received by this pubkey
-	ZapAmtRecd   int64 // sats received via kind 9735 zap receipts
-	ZapAmtSent   int64 // sats sent via kind 9735 zap receipts
-	ZapCntRecd   int   // number of zap receipts received
-	ZapCntSent   int   // number of zap receipts sent
-	FirstCreated int64 // earliest known event timestamp (unix)
+	Followers     int            // number of kind 3 lists that include this pubkey
+	PostCount     int            // kind 1 notes (not replies)
+	ReplyCount    int            // kind 1 notes that are replies (have "e" tag)
+	ReactionsSent int            // kind 7 reactions sent by this pubkey
+	ReactionsRecd int            // kind 7 reactions received by this pubkey
+	ZapAmtRecd    int64          // sats received via kind 9735 zap receipts
+	ZapAmtSent    int64          // sats sent via kind 9735 zap receipts
+	ZapCntRecd    int            // number of zap receipts received
+	ZapCntSent    int            // number of zap receipts sent
+	FirstCreated  int64          // earliest known event timestamp (unix)
+	Topics        map[string]int // hashtag -> count from notes
+	HourBuckets   [24]int        // event count per UTC hour (0-23)
+	ReportsRecd   int            // kind 1984 reports received
+	ReportsSent   int            // kind 1984 reports sent
 }
 
 // MetaStore holds metadata for all crawled pubkeys.
@@ -88,6 +94,7 @@ func (ms *MetaStore) CrawlMetadata(ctx context.Context, pubkeys []string) {
 		ms.crawlNotes(ctx, pool, batch)
 		ms.crawlReactions(ctx, pool, batch)
 		ms.crawlZaps(ctx, pool, batch)
+		ms.crawlReports(ctx, pool, batch)
 
 		if (i/batchSize+1)%5 == 0 {
 			log.Printf("Metadata crawl: processed %d/%d pubkeys", end, len(pubkeys))
@@ -98,6 +105,7 @@ func (ms *MetaStore) CrawlMetadata(ctx context.Context, pubkeys []string) {
 }
 
 // crawlNotes fetches kind 1 events and classifies them as posts or replies.
+// Also collects hashtag topics and activity hour buckets.
 func (ms *MetaStore) crawlNotes(ctx context.Context, pool *nostr.SimplePool, pubkeys []string) {
 	filter := nostr.Filter{
 		Kinds:   []int{1},
@@ -115,6 +123,10 @@ func (ms *MetaStore) crawlNotes(ctx context.Context, pool *nostr.SimplePool, pub
 		if m.FirstCreated == 0 || ts < m.FirstCreated {
 			m.FirstCreated = ts
 		}
+
+		// Track activity hour (UTC)
+		hour := time.Unix(ts, 0).UTC().Hour()
+		m.HourBuckets[hour]++
 		ms.mu.Unlock()
 
 		// Classify: reply if it has an "e" tag (referencing another event)
@@ -122,7 +134,18 @@ func (ms *MetaStore) crawlNotes(ctx context.Context, pool *nostr.SimplePool, pub
 		for _, tag := range ev.Event.Tags {
 			if tag[0] == "e" {
 				isReply = true
-				break
+			}
+			// Collect hashtag topics
+			if tag[0] == "t" && len(tag) >= 2 {
+				topic := strings.ToLower(strings.TrimSpace(tag[1]))
+				if topic != "" {
+					ms.mu.Lock()
+					if m.Topics == nil {
+						m.Topics = make(map[string]int)
+					}
+					m.Topics[topic]++
+					ms.mu.Unlock()
+				}
 			}
 		}
 
@@ -198,6 +221,93 @@ func (ms *MetaStore) crawlZaps(ctx context.Context, pool *nostr.SimplePool, pubk
 		// The sender is typically in the "description" tag's event JSON,
 		// but parsing that is complex. We skip sender attribution for now.
 	}
+}
+
+// crawlReports fetches kind 1984 report events to count reports sent and received.
+func (ms *MetaStore) crawlReports(ctx context.Context, pool *nostr.SimplePool, pubkeys []string) {
+	// Reports SENT by these pubkeys
+	filter := nostr.Filter{
+		Kinds:   []int{1984},
+		Authors: pubkeys,
+		Limit:   len(pubkeys) * 5,
+	}
+
+	evCh := pool.SubManyEose(ctx, relays, nostr.Filters{filter})
+	for ev := range evCh {
+		m := ms.Get(ev.Event.PubKey)
+		ms.mu.Lock()
+		m.ReportsSent++
+		ms.mu.Unlock()
+
+		// Count as received by the p-tagged pubkey
+		for _, tag := range ev.Event.Tags {
+			if tag[0] == "p" && len(tag) >= 2 {
+				target := ms.Get(tag[1])
+				ms.mu.Lock()
+				target.ReportsRecd++
+				ms.mu.Unlock()
+				break
+			}
+		}
+	}
+}
+
+// TopTopics returns the top N most frequent hashtags for a pubkey.
+func (m *PubkeyMeta) TopTopics(n int) []string {
+	if len(m.Topics) == 0 {
+		return nil
+	}
+
+	type kv struct {
+		key   string
+		count int
+	}
+	pairs := make([]kv, 0, len(m.Topics))
+	for k, v := range m.Topics {
+		pairs = append(pairs, kv{k, v})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].count > pairs[j].count
+	})
+
+	limit := n
+	if limit > len(pairs) {
+		limit = len(pairs)
+	}
+	result := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		result[i] = pairs[i].key
+	}
+	return result
+}
+
+// ActiveHours returns the start and end hours (UTC, 0-23) of the user's peak activity window.
+// It finds the 8-hour contiguous window with the most events and returns the start and end.
+func (m *PubkeyMeta) ActiveHours() (start, end int) {
+	total := 0
+	for _, c := range m.HourBuckets {
+		total += c
+	}
+	if total == 0 {
+		return 0, 0
+	}
+
+	// Find the 8-hour contiguous window with the most events
+	windowSize := 8
+	bestSum := 0
+	bestStart := 0
+	for s := 0; s < 24; s++ {
+		sum := 0
+		for i := 0; i < windowSize; i++ {
+			sum += m.HourBuckets[(s+i)%24]
+		}
+		if sum > bestSum {
+			bestSum = sum
+			bestStart = s
+		}
+	}
+
+	return bestStart, (bestStart + windowSize) % 24
 }
 
 // extractZapAmount extracts the sats amount from a zap receipt's bolt11 tag.
