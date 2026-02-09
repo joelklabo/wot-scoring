@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -88,22 +89,7 @@ func handleNIP05(w http.ResponseWriter, r *http.Request) {
 	extAssertions := externalAssertions.GetForSubject(pubkey)
 	compositeScore, extSources := CompositeScore(internalScore, extAssertions, externalAssertions)
 
-	// Determine trust level based on score
-	trustLevel := "unknown"
-	if found {
-		switch {
-		case internalScore >= 80:
-			trustLevel = "highly_trusted"
-		case internalScore >= 50:
-			trustLevel = "trusted"
-		case internalScore >= 20:
-			trustLevel = "moderate"
-		case internalScore > 0:
-			trustLevel = "low"
-		default:
-			trustLevel = "untrusted"
-		}
-	}
+	trustLevel := nip05TrustLevel(internalScore, found)
 
 	resp := map[string]interface{}{
 		"nip05":       id,
@@ -141,4 +127,110 @@ func handleNIP05(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// nip05TrustLevel returns a trust level string based on the normalized score.
+func nip05TrustLevel(score int, found bool) string {
+	if !found {
+		return "unknown"
+	}
+	switch {
+	case score >= 80:
+		return "highly_trusted"
+	case score >= 50:
+		return "trusted"
+	case score >= 20:
+		return "moderate"
+	case score > 0:
+		return "low"
+	default:
+		return "untrusted"
+	}
+}
+
+// nip05Result holds the result of a single NIP-05 bulk resolution.
+type nip05Result struct {
+	Index  int
+	Result map[string]interface{}
+}
+
+// handleNIP05Batch handles POST /nip05/batch
+// Resolves multiple NIP-05 identifiers concurrently and returns trust profiles.
+func handleNIP05Batch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Identifiers) == 0 {
+		http.Error(w, `{"error":"identifiers array required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Identifiers) > 50 {
+		http.Error(w, `{"error":"max 50 identifiers per request"}`, http.StatusBadRequest)
+		return
+	}
+
+	stats := graph.Stats()
+
+	// Resolve all NIP-05 identifiers concurrently
+	var mu sync.Mutex
+	results := make([]map[string]interface{}, len(req.Identifiers))
+	var wg sync.WaitGroup
+
+	for i, id := range req.Identifiers {
+		wg.Add(1)
+		go func(idx int, identifier string) {
+			defer wg.Done()
+
+			entry := map[string]interface{}{
+				"nip05": identifier,
+			}
+
+			pubkey, nip05Relays, err := resolveNIP05(identifier)
+			if err != nil {
+				entry["error"] = err.Error()
+				entry["verified"] = false
+				mu.Lock()
+				results[idx] = entry
+				mu.Unlock()
+				return
+			}
+
+			score, found := graph.GetScore(pubkey)
+			m := meta.Get(pubkey)
+			internalScore := normalizeScore(score, stats.Nodes)
+
+			entry["pubkey"] = pubkey
+			entry["verified"] = true
+			entry["trust_level"] = nip05TrustLevel(internalScore, found)
+			entry["score"] = internalScore
+			entry["found"] = found
+			entry["followers"] = m.Followers
+
+			if len(nip05Relays) > 0 {
+				entry["nip05_relays"] = nip05Relays
+			}
+
+			mu.Lock()
+			results[idx] = entry
+			mu.Unlock()
+		}(i, id)
+	}
+
+	wg.Wait()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results":    results,
+		"count":      len(results),
+		"graph_size": stats.Nodes,
+	})
 }

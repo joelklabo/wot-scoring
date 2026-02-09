@@ -1989,6 +1989,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/health</span><span class="desc">— Health check</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/nip05?id=user@domain</span><span class="desc">— NIP-05 verification + WoT trust profile</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/nip05/batch</span><span class="desc">— Bulk NIP-05 verification (up to 50 identifiers)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 </div>
 
@@ -1996,9 +1997,9 @@ footer a:hover{text-decoration:underline}
 <h2 style="font-size:1.3rem;color:#fff;margin-bottom:1rem">L402 Lightning Paywall</h2>
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
-<div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay</span></div>
+<div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -2346,6 +2347,7 @@ func main() {
 	http.HandleFunc("/authorized", handleAuthorized)
 	http.HandleFunc("/communities", handleCommunities)
 	http.HandleFunc("/nip05", handleNIP05)
+	http.HandleFunc("/nip05/batch", handleNIP05Batch)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -2386,6 +2388,7 @@ POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["h
 /communities — Top trust communities detected via label propagation
 /communities?pubkey=<hex> — Community membership and peers for a pubkey
 /nip05?id=user@domain — NIP-05 verification + WoT trust profile (resolves NIP-05 to pubkey, returns trust score)
+POST /nip05/batch — Bulk NIP-05 verification (up to 50 identifiers, concurrent resolution)
 /providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON

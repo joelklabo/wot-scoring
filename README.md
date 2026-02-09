@@ -49,6 +49,7 @@ GET /authorized?pubkey=<hex> — Authorizations for a specific provider
 GET /communities             — Top trust communities (label propagation clusters)
 GET /communities?pubkey=<hex>— Community membership and top peers for a pubkey
 GET /nip05?id=user@domain    — NIP-05 verification + WoT trust profile (resolves identity to pubkey)
+POST /nip05/batch            — Bulk NIP-05 verification (up to 50 identifiers, concurrent)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -579,6 +580,53 @@ Response:
 
 This endpoint resolves the NIP-05 identifier via the standard `/.well-known/nostr.json` protocol, then returns the full WoT trust profile for the resolved pubkey. Useful for verifying identities before transacting, following, or trusting someone.
 
+## Bulk NIP-05 Verification
+
+Verify and trust-score up to 50 NIP-05 identifiers in a single request. Resolves all identifiers concurrently for fast directory-scale lookups.
+
+```
+POST /nip05/batch
+Content-Type: application/json
+{"identifiers": ["jb55@jb55.com", "max@klabo.world", "alice@example.com"]}
+```
+
+Response:
+
+```json
+{
+  "count": 3,
+  "graph_size": 51446,
+  "results": [
+    {
+      "nip05": "jb55@jb55.com",
+      "pubkey": "32e1827...",
+      "verified": true,
+      "trust_level": "highly_trusted",
+      "score": 92,
+      "found": true,
+      "followers": 12847,
+      "nip05_relays": ["wss://relay.damus.io"]
+    },
+    {
+      "nip05": "max@klabo.world",
+      "pubkey": "f2da534b...",
+      "verified": true,
+      "trust_level": "trusted",
+      "score": 55,
+      "found": true,
+      "followers": 42
+    },
+    {
+      "nip05": "alice@example.com",
+      "error": "NIP-05 endpoint returned status 404",
+      "verified": false
+    }
+  ]
+}
+```
+
+Failed resolutions return per-item errors without failing the entire batch. Useful for clients that need to verify contact lists, organization directories, or NIP-05-heavy platforms.
+
 ## L402 Lightning Paywall
 
 The API supports the [L402 protocol](https://docs.lightning.engineering/the-lightning-network/l402) for pay-per-query access via Lightning Network micropayments.
@@ -589,9 +637,9 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 
 | Endpoint | Price |
 |----------|-------|
-| `/score`, `/decay` | 1 sat |
+| `/score`, `/decay`, `/nip05` | 1 sat |
 | `/personalized`, `/similar`, `/recommend`, `/compare` | 2 sats |
-| `/audit` | 5 sats |
+| `/audit`, `/nip05/batch` | 5 sats |
 | `/batch` | 10 sats |
 
 All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`) are free and unlimited.
