@@ -139,6 +139,45 @@ func (g *Graph) AllFollowers() []string {
 	return result
 }
 
+// Percentile returns the percentile rank of a pubkey (0.0-1.0).
+// A percentile of 0.95 means this pubkey scores higher than 95% of all nodes.
+func (g *Graph) Percentile(pubkey string) float64 {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	score, ok := g.scores[pubkey]
+	if !ok || len(g.scores) == 0 {
+		return 0
+	}
+
+	below := 0
+	for _, s := range g.scores {
+		if s < score {
+			below++
+		}
+	}
+	return float64(below) / float64(len(g.scores))
+}
+
+// Rank returns the 1-based rank of a pubkey among all scored nodes (1 = highest).
+func (g *Graph) Rank(pubkey string) int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	score, ok := g.scores[pubkey]
+	if !ok {
+		return 0
+	}
+
+	rank := 1
+	for _, s := range g.scores {
+		if s > score {
+			rank++
+		}
+	}
+	return rank
+}
+
 func (g *Graph) Stats() GraphStats {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -292,6 +331,126 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 	if len(extSources) > 0 {
 		resp["composite_score"] = compositeScore
 		resp["external_assertions"] = extSources
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// handleAudit explains why a pubkey has its score, breaking down all components.
+func handleAudit(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("pubkey")
+	if raw == "" {
+		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	pubkey, err := resolvePubkey(raw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	rawScore, found := graph.GetScore(pubkey)
+	stats := graph.Stats()
+	m := meta.Get(pubkey)
+	internalScore := normalizeScore(rawScore, stats.Nodes)
+
+	follows := graph.GetFollows(pubkey)
+	followers := graph.GetFollowers(pubkey)
+	percentile := graph.Percentile(pubkey)
+	rank := graph.Rank(pubkey)
+
+	// PageRank breakdown
+	pagerank := map[string]interface{}{
+		"raw_score":        rawScore,
+		"normalized_score": internalScore,
+		"follower_count":   len(followers),
+		"following_count":  len(follows),
+		"percentile":       math.Round(percentile*10000) / 10000,
+		"rank":             rank,
+		"algorithm":        "PageRank",
+		"damping":          0.85,
+		"iterations":       20,
+		"normalization":    "log10(raw/avg + 1) * 25, capped at 100",
+	}
+
+	// Engagement breakdown
+	engagement := map[string]interface{}{
+		"posts":              m.PostCount,
+		"replies":            m.ReplyCount,
+		"reactions_received": m.ReactionsRecd,
+		"reactions_sent":     m.ReactionsSent,
+		"zaps_received_sats": m.ZapAmtRecd,
+		"zaps_received_count": m.ZapCntRecd,
+		"zaps_sent_sats":     m.ZapAmtSent,
+		"zaps_sent_count":    m.ZapCntSent,
+	}
+	if m.FirstCreated > 0 {
+		engagement["first_event"] = time.Unix(m.FirstCreated, 0).UTC().Format(time.RFC3339)
+	}
+
+	// External assertions breakdown
+	extAssertions := externalAssertions.GetForSubject(pubkey)
+	compositeScore, extSources := CompositeScore(internalScore, extAssertions, externalAssertions)
+
+	var composite map[string]interface{}
+	if len(extSources) > 0 {
+		normalizedSum := 0
+		for _, src := range extSources {
+			normalizedSum += src["normalized_rank"].(int)
+		}
+		externalAvg := float64(normalizedSum) / float64(len(extSources))
+
+		composite = map[string]interface{}{
+			"final_score":     compositeScore,
+			"internal_weight": 0.70,
+			"external_weight": 0.30,
+			"internal_score":  internalScore,
+			"external_average": math.Round(externalAvg*100) / 100,
+			"external_sources": extSources,
+		}
+	}
+
+	// Top followers by WoT score (up to 5)
+	type followerScore struct {
+		Pubkey string  `json:"pubkey"`
+		Score  int     `json:"score"`
+	}
+	topFollowers := make([]followerScore, 0)
+	for _, f := range followers {
+		s, ok := graph.GetScore(f)
+		if ok {
+			topFollowers = append(topFollowers, followerScore{
+				Pubkey: f,
+				Score:  normalizeScore(s, stats.Nodes),
+			})
+		}
+	}
+	sort.Slice(topFollowers, func(i, j int) bool {
+		return topFollowers[i].Score > topFollowers[j].Score
+	})
+	if len(topFollowers) > 5 {
+		topFollowers = topFollowers[:5]
+	}
+
+	resp := map[string]interface{}{
+		"pubkey":         pubkey,
+		"found":          found,
+		"pagerank":       pagerank,
+		"engagement":     engagement,
+		"top_followers":  topFollowers,
+		"graph_context": map[string]interface{}{
+			"total_nodes":  stats.Nodes,
+			"total_edges":  stats.Edges,
+			"last_rebuild": stats.LastBuild.UTC().Format(time.RFC3339),
+		},
+	}
+
+	if composite != nil {
+		resp["composite"] = composite
+	} else {
+		resp["final_score"] = internalScore
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1575,6 +1734,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoints">
 <h2>API Endpoints</h2>
 <div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust score + metadata</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/audit?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Score audit: full breakdown of why a pubkey has its score</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/personalized?viewer=&lt;hex&gt;&amp;target=&lt;hex&gt;</span><span class="desc">— Personalized trust score</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/batch</span><span class="desc">— Score multiple pubkeys at once</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/similar?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Find similar pubkeys by follow overlap</span></div>
@@ -1740,6 +1900,7 @@ func main() {
 		})
 	})
 	http.HandleFunc("/score", handleScore)
+	http.HandleFunc("/audit", handleAudit)
 	http.HandleFunc("/batch", handleBatch)
 	http.HandleFunc("/personalized", handlePersonalized)
 	http.HandleFunc("/similar", handleSimilar)
@@ -1774,6 +1935,7 @@ func main() {
 			"name":        "WoT Scoring Service",
 			"description": "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with full metadata collection.",
 			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382), with composite scoring from external providers
+/audit?pubkey=<hex> — Score audit: full breakdown of why a pubkey has its score (PageRank, engagement, external, percentile)
 /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["hex1","hex2",...]})
 /similar?pubkey=<hex> — Find similar pubkeys by follow-graph overlap (Jaccard + WoT weighted)

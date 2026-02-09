@@ -586,3 +586,246 @@ func TestBfsPath(t *testing.T) {
 		t.Error("expected path not found within depth 2")
 	}
 }
+
+func TestGraphPercentile(t *testing.T) {
+	g := NewGraph()
+	// Create a graph where c gets the most followers (highest PageRank)
+	g.AddFollow("a", "c")
+	g.AddFollow("b", "c")
+	g.AddFollow("c", "a")
+	g.ComputePageRank(20, 0.85)
+
+	// c should have highest percentile (most followers)
+	pC := g.Percentile("c")
+	pA := g.Percentile("a")
+
+	if pC <= pA {
+		t.Errorf("expected c's percentile (%v) > a's percentile (%v)", pC, pA)
+	}
+
+	// Unknown pubkey should return 0
+	if p := g.Percentile("unknown"); p != 0 {
+		t.Errorf("expected 0 percentile for unknown, got %v", p)
+	}
+}
+
+func TestGraphRank(t *testing.T) {
+	g := NewGraph()
+	g.AddFollow("a", "c")
+	g.AddFollow("b", "c")
+	g.AddFollow("c", "a")
+	g.ComputePageRank(20, 0.85)
+
+	rankC := g.Rank("c")
+	rankA := g.Rank("a")
+
+	if rankC >= rankA {
+		t.Errorf("expected c's rank (%d) < a's rank (%d) — lower is better", rankC, rankA)
+	}
+
+	if rankC != 1 {
+		t.Errorf("expected c to be rank 1 (highest score), got %d", rankC)
+	}
+
+	// Unknown pubkey should return 0
+	if r := g.Rank("unknown"); r != 0 {
+		t.Errorf("expected 0 rank for unknown, got %d", r)
+	}
+}
+
+func TestHandleAudit(t *testing.T) {
+	oldGraph := graph
+	oldMeta := meta
+	defer func() {
+		graph = oldGraph
+		meta = oldMeta
+	}()
+
+	graph = NewGraph()
+	meta = NewMetaStore()
+
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("alice", "carol")
+	graph.AddFollow("bob", "alice") // mutual
+	graph.AddFollow("carol", "alice")
+	graph.AddFollow("dave", "alice")
+	graph.ComputePageRank(20, 0.85)
+
+	// Set up metadata for alice
+	m := meta.Get("alice")
+	m.PostCount = 42
+	m.ReplyCount = 15
+	m.ReactionsRecd = 100
+	m.ZapAmtRecd = 5000
+	m.ZapCntRecd = 3
+
+	req := httptest.NewRequest(http.MethodGet, "/audit?pubkey=alice", nil)
+	w := httptest.NewRecorder()
+	handleAudit(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Check top-level fields
+	if resp["pubkey"] != "alice" {
+		t.Errorf("expected pubkey alice, got %v", resp["pubkey"])
+	}
+	if resp["found"] != true {
+		t.Error("expected found = true")
+	}
+
+	// Check pagerank breakdown
+	pagerank, ok := resp["pagerank"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected pagerank object in response")
+	}
+	if pagerank["algorithm"] != "PageRank" {
+		t.Errorf("expected algorithm PageRank, got %v", pagerank["algorithm"])
+	}
+	if pagerank["damping"].(float64) != 0.85 {
+		t.Errorf("expected damping 0.85, got %v", pagerank["damping"])
+	}
+	if pagerank["follower_count"].(float64) != 3 {
+		t.Errorf("expected 3 followers, got %v", pagerank["follower_count"])
+	}
+	if pagerank["following_count"].(float64) != 2 {
+		t.Errorf("expected 2 following, got %v", pagerank["following_count"])
+	}
+	if pagerank["rank"].(float64) < 1 {
+		t.Error("expected rank >= 1")
+	}
+	if pagerank["percentile"].(float64) < 0 || pagerank["percentile"].(float64) > 1 {
+		t.Errorf("expected percentile in [0,1], got %v", pagerank["percentile"])
+	}
+
+	// Check engagement breakdown
+	engagement, ok := resp["engagement"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected engagement object in response")
+	}
+	if engagement["posts"].(float64) != 42 {
+		t.Errorf("expected 42 posts, got %v", engagement["posts"])
+	}
+	if engagement["reactions_received"].(float64) != 100 {
+		t.Errorf("expected 100 reactions, got %v", engagement["reactions_received"])
+	}
+	if engagement["zaps_received_sats"].(float64) != 5000 {
+		t.Errorf("expected 5000 zap sats, got %v", engagement["zaps_received_sats"])
+	}
+
+	// Check top_followers
+	topFollowers, ok := resp["top_followers"].([]interface{})
+	if !ok {
+		t.Fatal("expected top_followers array in response")
+	}
+	if len(topFollowers) == 0 {
+		t.Error("expected at least 1 top follower")
+	}
+
+	// Check graph context
+	graphCtx, ok := resp["graph_context"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected graph_context object in response")
+	}
+	if graphCtx["total_nodes"].(float64) < 1 {
+		t.Error("expected total_nodes >= 1")
+	}
+
+	// Without external assertions, should have final_score at top level
+	if _, ok := resp["final_score"]; !ok {
+		t.Error("expected final_score when no external assertions present")
+	}
+}
+
+func TestHandleAuditMissingPubkey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/audit", nil)
+	w := httptest.NewRecorder()
+	handleAudit(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditUnknownPubkey(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.AddFollow("a", "b")
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/audit?pubkey=unknown", nil)
+	w := httptest.NewRecorder()
+	handleAudit(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if resp["found"] != false {
+		t.Error("expected found = false for unknown pubkey")
+	}
+	// Should still return audit structure even for unknown pubkeys
+	if _, ok := resp["pagerank"]; !ok {
+		t.Error("expected pagerank object even for unknown pubkey")
+	}
+}
+
+func TestHandleAuditWithExternalAssertions(t *testing.T) {
+	oldGraph := graph
+	oldAssertions := externalAssertions
+	defer func() {
+		graph = oldGraph
+		externalAssertions = oldAssertions
+	}()
+
+	graph = NewGraph()
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("bob", "alice")
+	graph.ComputePageRank(20, 0.85)
+
+	externalAssertions = NewAssertionStore()
+	externalAssertions.Add(&ExternalAssertion{
+		ProviderPubkey: "provider1",
+		SubjectPubkey:  "alice",
+		Rank:           80,
+		CreatedAt:      1700000000,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/audit?pubkey=alice", nil)
+	w := httptest.NewRecorder()
+	handleAudit(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	// Should have composite section when external assertions exist
+	composite, ok := resp["composite"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected composite object when external assertions exist")
+	}
+	if composite["internal_weight"].(float64) != 0.70 {
+		t.Errorf("expected internal weight 0.70, got %v", composite["internal_weight"])
+	}
+	if composite["external_weight"].(float64) != 0.30 {
+		t.Errorf("expected external weight 0.30, got %v", composite["external_weight"])
+	}
+
+	sources, ok := composite["external_sources"].([]interface{})
+	if !ok || len(sources) == 0 {
+		t.Error("expected at least 1 external source")
+	}
+}
