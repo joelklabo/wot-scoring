@@ -48,6 +48,7 @@ GET /authorized              — Kind 10040 authorized users (who declared trust
 GET /authorized?pubkey=<hex> — Authorizations for a specific provider
 GET /communities             — Top trust communities (label propagation clusters)
 GET /communities?pubkey=<hex>— Community membership and top peers for a pubkey
+GET /nip05?id=user@domain    — NIP-05 verification + WoT trust profile (resolves identity to pubkey)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -544,6 +545,39 @@ Response:
 **Algorithm:** Exponential decay on PageRank edge weights. Each follow's contribution is scaled by `e^(-λ × age_days)` where `λ = ln(2) / half_life_days`. Default half-life: 365 days (a 1-year-old follow has 50% weight). Configurable via `half_life` parameter.
 
 The `/decay/top` endpoint shows how rankings shift when freshness is factored in — who gains rank (recently followed) vs who loses rank (legacy follows fading).
+
+## NIP-05 Identity Verification
+
+Look up a NIP-05 identifier and get its WoT trust profile in one request — bridges Nostr identity verification with Web of Trust scoring:
+
+```
+GET /nip05?id=user@domain.com
+```
+
+Response:
+
+```json
+{
+  "nip05": "user@domain.com",
+  "pubkey": "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
+  "verified": true,
+  "trust_level": "highly_trusted",
+  "score": 92,
+  "raw_score": 0.000245,
+  "found": true,
+  "graph_size": 51446,
+  "followers": 12847,
+  "post_count": 234,
+  "reply_count": 156,
+  "reactions": 892,
+  "nip05_relays": ["wss://relay.damus.io"],
+  "topics": ["bitcoin", "nostr", "lightning"]
+}
+```
+
+**Trust levels:** `highly_trusted` (80+), `trusted` (50+), `moderate` (20+), `low` (>0), `untrusted` (0), `unknown` (not in graph).
+
+This endpoint resolves the NIP-05 identifier via the standard `/.well-known/nostr.json` protocol, then returns the full WoT trust profile for the resolved pubkey. Useful for verifying identities before transacting, following, or trusting someone.
 
 ## L402 Lightning Paywall
 

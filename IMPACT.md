@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 25+ API endpoints, auto re-crawls every 6 hours, publishes to 3 relays. L402 Lightning paywall deployed to production.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 26+ API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 25+ endpoints serve live data. 164 automated tests pass in CI (including L402 paywall, community detection, and authorization tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 26+ endpoints serve live data. 178 automated tests pass in CI (including L402 paywall, community detection, authorization, and NIP-05 verification tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -41,6 +41,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Trust comparison** (`/compare`) — side-by-side comparison showing direct relationship, shared follows, Jaccard similarity, and trust path.
 - **Community detection** (`/communities`) — label propagation algorithm identifies trust communities within the follow graph, revealing organic clusters of related users.
 - **Authorization tracking** (`/authorized`) — consumes kind 10040 events from relays, showing which users have explicitly authorized specific NIP-85 scoring providers.
+- **NIP-05 identity verification** (`/nip05`) — resolves NIP-05 identifiers (user@domain) to pubkeys via standard `.well-known/nostr.json`, then returns the full WoT trust profile. Bridges the Nostr identity layer with NIP-85 trust assertions in a single API call.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
@@ -49,6 +50,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
 - **NIP-89 handler** published on startup for automatic client discovery
 - **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)
+- **NIP-05 identity resolution** — `/nip05` endpoint resolves NIP-05 identifiers to pubkeys and returns WoT trust profiles, bridging identity verification with trust scoring
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 
@@ -71,7 +73,7 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 164 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, topics, activity hours, reports, and API handlers
+- 178 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 verification, topics, activity hours, reports, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability

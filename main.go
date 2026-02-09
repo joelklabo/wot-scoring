@@ -2305,6 +2305,7 @@ func main() {
 	http.HandleFunc("/decay/top", handleDecayTop)
 	http.HandleFunc("/authorized", handleAuthorized)
 	http.HandleFunc("/communities", handleCommunities)
+	http.HandleFunc("/nip05", handleNIP05)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -2344,6 +2345,7 @@ POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["h
 /authorized?pubkey=<hex> — Authorizations for a specific provider
 /communities — Top trust communities detected via label propagation
 /communities?pubkey=<hex> — Community membership and peers for a pubkey
+/nip05?id=user@domain — NIP-05 verification + WoT trust profile (resolves NIP-05 to pubkey, returns trust score)
 /providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
