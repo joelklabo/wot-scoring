@@ -279,3 +279,128 @@ func TestGraphAllFollowers(t *testing.T) {
 		t.Error("expected carol in AllFollowers")
 	}
 }
+
+func TestHandleRecommend(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	// alice follows: bob, carol, dave
+	// bob follows: eve, frank, greg
+	// carol follows: eve, hank
+	// dave follows: frank, ivan
+	// So eve is followed by bob + carol (2 of alice's 3 follows) — strong recommendation
+	// frank is followed by bob + dave (2 of alice's 3 follows) — strong recommendation
+	// greg is followed only by bob (1 of 3) — below threshold
+	// hank is followed only by carol (1 of 3) — below threshold
+	// ivan is followed only by dave (1 of 3) — below threshold
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("alice", "carol")
+	graph.AddFollow("alice", "dave")
+	graph.AddFollow("bob", "eve")
+	graph.AddFollow("bob", "frank")
+	graph.AddFollow("bob", "greg")
+	graph.AddFollow("carol", "eve")
+	graph.AddFollow("carol", "hank")
+	graph.AddFollow("dave", "frank")
+	graph.AddFollow("dave", "ivan")
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/recommend?pubkey=alice", nil)
+	w := httptest.NewRecorder()
+	handleRecommend(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	recs, ok := resp["recommendations"].([]interface{})
+	if !ok {
+		t.Fatal("expected recommendations array in response")
+	}
+
+	// eve and frank should be recommended (each followed by 2 of alice's 3 follows)
+	if len(recs) < 2 {
+		t.Fatalf("expected at least 2 recommendations, got %d", len(recs))
+	}
+
+	// Collect recommended pubkeys
+	recPubkeys := make(map[string]bool)
+	for _, r := range recs {
+		entry := r.(map[string]interface{})
+		recPubkeys[entry["pubkey"].(string)] = true
+		// mutual_follows should be 2 for eve and frank
+		if entry["pubkey"] == "eve" || entry["pubkey"] == "frank" {
+			if entry["mutual_follows"].(float64) != 2 {
+				t.Errorf("expected 2 mutual follows for %s, got %v", entry["pubkey"], entry["mutual_follows"])
+			}
+		}
+	}
+
+	if !recPubkeys["eve"] {
+		t.Error("expected eve in recommendations")
+	}
+	if !recPubkeys["frank"] {
+		t.Error("expected frank in recommendations")
+	}
+
+	// greg, hank, ivan should NOT appear (only 1 mutual follow, below threshold of 2)
+	for _, excluded := range []string{"greg", "hank", "ivan"} {
+		if recPubkeys[excluded] {
+			t.Errorf("%s should not be in recommendations (only 1 mutual follow)", excluded)
+		}
+	}
+
+	// alice should NOT appear in her own recommendations
+	if recPubkeys["alice"] {
+		t.Error("alice should not appear in her own recommendations")
+	}
+
+	// bob, carol, dave should NOT appear (already followed by alice)
+	for _, followed := range []string{"bob", "carol", "dave"} {
+		if recPubkeys[followed] {
+			t.Errorf("%s should not be in recommendations (already followed)", followed)
+		}
+	}
+
+	// Check follows_count
+	if resp["follows_count"].(float64) != 3 {
+		t.Errorf("expected follows_count 3, got %v", resp["follows_count"])
+	}
+}
+
+func TestHandleRecommendMissingPubkey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/recommend", nil)
+	w := httptest.NewRecorder()
+	handleRecommend(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleRecommendNoFollows(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/recommend?pubkey=nonexistent", nil)
+	w := httptest.NewRecorder()
+	handleRecommend(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "pubkey has no follows in graph" {
+		t.Errorf("expected error message for nonexistent pubkey, got %v", resp["error"])
+	}
+}

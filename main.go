@@ -593,6 +593,123 @@ func handleSimilar(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleRecommend(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("pubkey")
+	if raw == "" {
+		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	pubkey, err := resolvePubkey(raw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if n, err := fmt.Sscanf(limitStr, "%d", &limit); n != 1 || err != nil || limit < 1 {
+			limit = 20
+		}
+		if limit > 50 {
+			limit = 50
+		}
+	}
+
+	targetFollows := graph.GetFollows(pubkey)
+	if len(targetFollows) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pubkey":          pubkey,
+			"recommendations": []interface{}{},
+			"error":           "pubkey has no follows in graph",
+		})
+		return
+	}
+
+	// Build set of who the target already follows (for exclusion)
+	alreadyFollows := make(map[string]bool, len(targetFollows)+1)
+	alreadyFollows[pubkey] = true // exclude self
+	for _, f := range targetFollows {
+		alreadyFollows[f] = true
+	}
+
+	// Count how many of target's follows also follow each candidate
+	// "Friends of friends" — if many of your follows also follow X, you'd probably like X
+	candidateCounts := make(map[string]int)
+	for _, friend := range targetFollows {
+		friendFollows := graph.GetFollows(friend)
+		for _, candidate := range friendFollows {
+			if !alreadyFollows[candidate] {
+				candidateCounts[candidate]++
+			}
+		}
+	}
+
+	stats := graph.Stats()
+
+	type candidate struct {
+		Pubkey      string
+		MutualCount int // how many of target's follows also follow this candidate
+		WotScore    int
+	}
+
+	candidates := make([]candidate, 0, len(candidateCounts))
+	for pk, count := range candidateCounts {
+		if count < 2 {
+			continue // need at least 2 mutual connections to be a recommendation
+		}
+		rawScore, _ := graph.GetScore(pk)
+		wotScore := normalizeScore(rawScore, stats.Nodes)
+		candidates = append(candidates, candidate{
+			Pubkey:      pk,
+			MutualCount: count,
+			WotScore:    wotScore,
+		})
+	}
+
+	// Sort by weighted score: 60% mutual ratio + 40% WoT score
+	totalFollows := float64(len(targetFollows))
+	sort.Slice(candidates, func(i, j int) bool {
+		ratioI := float64(candidates[i].MutualCount) / totalFollows
+		ratioJ := float64(candidates[j].MutualCount) / totalFollows
+		scoreI := ratioI*0.6 + float64(candidates[i].WotScore)/100.0*0.4
+		scoreJ := ratioJ*0.6 + float64(candidates[j].WotScore)/100.0*0.4
+		return scoreI > scoreJ
+	})
+
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	type resultEntry struct {
+		Pubkey       string  `json:"pubkey"`
+		MutualCount  int     `json:"mutual_follows"`  // how many of your follows also follow this person
+		MutualRatio  float64 `json:"mutual_ratio"`    // mutual_follows / your total follows (0-1)
+		WotScore     int     `json:"wot_score"`
+	}
+
+	results := make([]resultEntry, len(candidates))
+	for i, c := range candidates {
+		results[i] = resultEntry{
+			Pubkey:      c.Pubkey,
+			MutualCount: c.MutualCount,
+			MutualRatio: math.Round(float64(c.MutualCount)/totalFollows*1000) / 1000,
+			WotScore:    c.WotScore,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pubkey":          pubkey,
+		"recommendations": results,
+		"total_found":     len(candidates),
+		"follows_count":   len(targetFollows),
+		"graph_size":      stats.Nodes,
+	})
+}
+
 type TopEntry struct {
 	Pubkey    string  `json:"pubkey"`
 	Score     float64 `json:"score"`
@@ -1210,6 +1327,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/personalized?viewer=&lt;hex&gt;&amp;target=&lt;hex&gt;</span><span class="desc">— Personalized trust score</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/batch</span><span class="desc">— Score multiple pubkeys at once</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/similar?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Find similar pubkeys by follow overlap</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/recommend?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Follow recommendations (friends-of-friends)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
@@ -1372,6 +1490,7 @@ func main() {
 	http.HandleFunc("/batch", handleBatch)
 	http.HandleFunc("/personalized", handlePersonalized)
 	http.HandleFunc("/similar", handleSimilar)
+	http.HandleFunc("/recommend", handleRecommend)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
 	http.HandleFunc("/export", handleExport)
@@ -1404,6 +1523,7 @@ func main() {
 /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["hex1","hex2",...]})
 /similar?pubkey=<hex> — Find similar pubkeys by follow-graph overlap (Jaccard + WoT weighted)
+/recommend?pubkey=<hex> — Follow recommendations (friends-of-friends who you don't yet follow)
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)

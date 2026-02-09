@@ -33,6 +33,7 @@ GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382) + composi
 GET /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch                  — Score up to 100 pubkeys in one request (JSON: {"pubkeys":[...]})
 GET /similar?pubkey=<hex>    — Find similar pubkeys by follow-graph overlap
+GET /recommend?pubkey=<hex>  — Follow recommendations (friends-of-friends)
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
@@ -258,6 +259,35 @@ Response:
 ```
 
 **Algorithm:** Jaccard similarity of follow sets (|intersection| / |union|), weighted 70% similarity + 30% WoT PageRank score. Minimum 3 follows required. Max 50 results.
+
+## Follow Recommendations
+
+Get personalized follow recommendations — "who should this pubkey follow?" based on friends-of-friends analysis:
+
+```
+GET /recommend?pubkey=<hex|npub>&limit=20
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827...",
+  "recommendations": [
+    {
+      "pubkey": "82341f...",
+      "mutual_follows": 45,
+      "mutual_ratio": 0.293,
+      "wot_score": 67
+    }
+  ],
+  "total_found": 20,
+  "follows_count": 154,
+  "graph_size": 51446
+}
+```
+
+**Algorithm:** For each account you follow, find who *they* follow. Count how many of your follows also follow each candidate. Exclude accounts you already follow. Rank by 60% mutual ratio + 40% WoT score. Minimum 2 mutual connections required. Max 50 results.
 
 ## Batch Scoring
 
