@@ -53,6 +53,8 @@ POST /nip05/batch            — Bulk NIP-05 verification (up to 50 identifiers,
 GET /nip05/reverse?pubkey=<hex|npub> — Reverse NIP-05 lookup (pubkey → NIP-05 identity, bidirectional verification)
 GET /timeline?pubkey=<hex|npub> — Trust timeline: monthly follower growth and estimated score evolution over time
 GET /spam?pubkey=<hex|npub>  — Spam detection: multi-signal analysis with classification and signal breakdown
+POST /spam/batch             — Bulk spam check up to 100 pubkeys with summary counts (JSON: {"pubkeys":[...]})
+GET /weboftrust?pubkey=<hex|npub> — D3.js-compatible trust graph: nodes + links for force-directed visualization
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -70,6 +72,8 @@ The landing page at [wot.klabo.world](https://wot.klabo.world) includes three in
 - **Compare** — Side-by-side comparison of two pubkeys with relationship badges (mutual follow, shared follows, trusted followers) and bar charts
 - **Trust Path** — BFS shortest-path visualization showing each hop with WoT scores between any two pubkeys
 - **Timeline** — Trust evolution visualization showing monthly follower growth bars with velocity coloring
+- **Spam Check** — Multi-signal spam probability analysis with per-signal breakdown bars
+- **Trust Graph** — Interactive force-directed SVG visualization of a pubkey's trust network (follows, followers, mutual connections)
 
 ## Run
 

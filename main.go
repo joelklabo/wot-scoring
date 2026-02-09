@@ -1907,6 +1907,7 @@ footer a:hover{text-decoration:underline}
 <div class="tab" data-tab="nip05reverse">NIP-05 Reverse</div>
 <div class="tab" data-tab="timeline">Timeline</div>
 <div class="tab" data-tab="spam">Spam Check</div>
+<div class="tab" data-tab="trustgraph">Trust Graph</div>
 </div>
 
 <div class="tab-content active" id="tab-lookup">
@@ -1966,6 +1967,24 @@ footer a:hover{text-decoration:underline}
 <div class="search">
 <input type="text" id="spam-input" placeholder="Enter hex pubkey or npub to check for spam...">
 <div id="spam-result"></div>
+</div>
+</div>
+
+<div class="tab-content" id="tab-trustgraph">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Visualize a pubkey's trust network — who they follow, who follows them, and mutual connections.</p>
+<div class="search">
+<input type="text" id="graph-input" placeholder="Enter hex pubkey or npub to visualize trust network...">
+<div id="graph-controls" style="display:none;margin:1rem 0">
+<label style="color:#888;font-size:.85rem">Max nodes per direction: <input type="range" id="graph-limit" min="10" max="100" value="30" style="vertical-align:middle"> <span id="graph-limit-val">30</span></label>
+</div>
+<div id="graph-info" style="margin-bottom:1rem"></div>
+<div id="graph-container" style="width:100%%;background:#0a0a0a;border-radius:8px;overflow:hidden"></div>
+<div id="graph-legend" style="display:none;margin-top:1rem;padding:1rem;background:#111;border-radius:8px">
+<span style="color:#f7931a">● Center</span>&nbsp;&nbsp;
+<span style="color:#4ecdc4">● Follows</span>&nbsp;&nbsp;
+<span style="color:#ff6b6b">● Followers</span>&nbsp;&nbsp;
+<span style="color:#ffd93d">● Mutual</span>
+</div>
 </div>
 </div>
 
@@ -2335,6 +2354,78 @@ html+='</div>'});
 html+='</div></div>';
 spamResult.innerHTML=html;
 }).catch(()=>{err(spamResult,"Error analyzing pubkey")})},600)});
+
+// Trust Graph tab
+const graphInput=document.getElementById("graph-input"),graphContainer=document.getElementById("graph-container"),graphInfo=document.getElementById("graph-info"),graphControls=document.getElementById("graph-controls"),graphLegend=document.getElementById("graph-legend"),graphLimitSlider=document.getElementById("graph-limit"),graphLimitVal=document.getElementById("graph-limit-val");
+let graphTimer;
+graphLimitSlider.addEventListener("input",()=>{graphLimitVal.textContent=graphLimitSlider.value});
+function loadGraph(){clearTimeout(graphTimer);const v=graphInput.value.trim();if(!v){graphInfo.innerHTML="";graphContainer.innerHTML="";graphControls.style.display="none";graphLegend.style.display="none";return}
+if(v.length<63&&!v.startsWith("npub1")){graphInfo.innerHTML='<div style="color:#888;margin-top:.5rem;font-size:.9rem">Enter a 64-char hex pubkey or npub</div>';return}
+graphTimer=setTimeout(()=>{
+graphInfo.innerHTML='<div style="color:#555">Loading trust network...</div>';
+const lim=graphLimitSlider.value;
+fetch("/weboftrust?pubkey="+encodeURIComponent(v)+"&limit="+lim).then(r=>r.json()).then(d=>{
+if(d.error){err(graphInfo,d.error);return}
+graphControls.style.display="block";graphLegend.style.display="block";
+let info='<div style="color:#ccc;font-size:.9rem">'+d.node_count+' nodes, '+d.link_count+' links | Score: '+d.score+' | Rank: #'+d.rank+'</div>';
+graphInfo.innerHTML=info;
+renderGraph(d);
+}).catch(()=>{err(graphInfo,"Error loading trust graph")})},600)}
+graphInput.addEventListener("input",loadGraph);
+graphLimitSlider.addEventListener("change",loadGraph);
+
+function renderGraph(data){
+const W=graphContainer.clientWidth||800,H=500;
+const nodes=data.nodes.map((n,i)=>({...n,x:W/2+(Math.random()-.5)*200,y:H/2+(Math.random()-.5)*200,vx:0,vy:0}));
+const nodeMap={};nodes.forEach(n=>nodeMap[n.id]=n);
+const links=data.links.filter(l=>nodeMap[l.source]&&nodeMap[l.target]);
+const colors={center:"#f7931a",follow:"#4ecdc4",follower:"#ff6b6b",mutual:"#ffd93d"};
+const sizes={center:8,follow:4,follower:4,mutual:5};
+// Simple force simulation
+for(let iter=0;iter<120;iter++){
+// Repulsion
+for(let i=0;i<nodes.length;i++){for(let j=i+1;j<nodes.length;j++){
+let dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
+let dist=Math.sqrt(dx*dx+dy*dy)||1;
+let force=200/dist;
+let fx=dx/dist*force,fy=dy/dist*force;
+nodes[i].vx-=fx;nodes[i].vy-=fy;
+nodes[j].vx+=fx;nodes[j].vy+=fy;
+}}
+// Attraction (links)
+links.forEach(l=>{
+let s=nodeMap[l.source],t=nodeMap[l.target];if(!s||!t)return;
+let dx=t.x-s.x,dy=t.y-s.y;
+let dist=Math.sqrt(dx*dx+dy*dy)||1;
+let force=(dist-80)*0.01;
+let fx=dx/dist*force,fy=dy/dist*force;
+s.vx+=fx;s.vy+=fy;t.vx-=fx;t.vy-=fy;
+});
+// Center gravity
+nodes.forEach(n=>{n.vx+=(W/2-n.x)*0.01;n.vy+=(H/2-n.y)*0.01});
+// Apply
+nodes.forEach(n=>{n.vx*=0.8;n.vy*=0.8;n.x+=n.vx;n.y+=n.vy;n.x=Math.max(20,Math.min(W-20,n.x));n.y=Math.max(20,Math.min(H-20,n.y))});
+}
+// Render SVG
+let svg='<svg width="'+W+'" height="'+H+'" style="display:block">';
+// Links
+links.forEach(l=>{
+let s=nodeMap[l.source],t=nodeMap[l.target];if(!s||!t)return;
+svg+='<line x1="'+s.x+'" y1="'+s.y+'" x2="'+t.x+'" y2="'+t.y+'" stroke="#333" stroke-width="0.5" stroke-opacity="0.4"/>';
+});
+// Nodes
+nodes.forEach(n=>{
+let c=colors[n.group]||"#888",r=sizes[n.group]||4;
+let short=n.id.substring(0,8);
+svg+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+c+'" stroke="'+c+'" stroke-opacity="0.3" stroke-width="2">';
+svg+='<title>'+short+'... | Score: '+n.score+' | Follows: '+n.follows+' | Followers: '+n.followers+' | '+n.group+'</title></circle>';
+});
+// Center label
+let cn=nodes.find(n=>n.group==="center");
+if(cn){svg+='<text x="'+cn.x+'" y="'+(cn.y-12)+'" text-anchor="middle" fill="#f7931a" font-size="10" font-family="monospace">'+cn.id.substring(0,12)+'...</text>'}
+svg+='</svg>';
+graphContainer.innerHTML=svg;
+}
 </script>
 </body>
 </html>`
@@ -2489,6 +2580,8 @@ func main() {
 	http.HandleFunc("/nip05/reverse", handleNIP05Reverse)
 	http.HandleFunc("/timeline", handleTimeline)
 	http.HandleFunc("/spam", handleSpam)
+	http.HandleFunc("/spam/batch", handleSpamBatch)
+	http.HandleFunc("/weboftrust", handleWebOfTrust)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

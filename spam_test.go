@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -270,6 +271,151 @@ func TestSpamResponseHas6Signals(t *testing.T) {
 		if !names[name] {
 			t.Fatalf("missing signal: %s", name)
 		}
+	}
+}
+
+// --- Batch spam tests ---
+
+func TestSpamBatchRequiresPost(t *testing.T) {
+	req := httptest.NewRequest("GET", "/spam/batch", nil)
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestSpamBatchInvalidJSON(t *testing.T) {
+	req := httptest.NewRequest("POST", "/spam/batch", strings.NewReader("not json"))
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestSpamBatchEmptyArray(t *testing.T) {
+	req := httptest.NewRequest("POST", "/spam/batch", strings.NewReader(`{"pubkeys":[]}`))
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestSpamBatchTooMany(t *testing.T) {
+	// Build array of 101 pubkeys
+	pubkeys := make([]string, 101)
+	for i := range pubkeys {
+		pubkeys[i] = padHex(i)
+	}
+	body, _ := json.Marshal(map[string][]string{"pubkeys": pubkeys})
+	req := httptest.NewRequest("POST", "/spam/batch", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestSpamBatchMixedResults(t *testing.T) {
+	oldGraph := graph
+	oldMeta := meta
+	graph = NewGraph()
+	meta = NewMetaStore()
+	defer func() {
+		graph = oldGraph
+		meta = oldMeta
+	}()
+
+	trusted := padHex(1000)
+	unknown := padHex(2000)
+
+	// Build trust for one pubkey
+	for i := 0; i < 50; i++ {
+		graph.AddFollow(padHex(i), trusted)
+		if i > 0 {
+			graph.AddFollow(padHex(i), padHex(i-1))
+		}
+	}
+	graph.ComputePageRank(20, 0.85)
+
+	m := meta.Get(trusted)
+	m.Followers = 50
+	m.PostCount = 20
+	m.ReplyCount = 15
+	m.ReactionsSent = 30
+	m.ReactionsRecd = 25
+	m.FirstCreated = time.Now().AddDate(-2, 0, 0).Unix()
+
+	body, _ := json.Marshal(map[string][]string{
+		"pubkeys": {trusted, unknown, "npub1invalid"},
+	})
+	req := httptest.NewRequest("POST", "/spam/batch", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Results []json.RawMessage `json:"results"`
+		Count   int               `json:"count"`
+		Summary map[string]int    `json:"summary"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.Count != 3 {
+		t.Fatalf("expected 3 results, got %d", resp.Count)
+	}
+
+	// First result (trusted) should be likely_human
+	var first SpamBatchResult
+	json.Unmarshal(resp.Results[0], &first)
+	if first.Classification != "likely_human" {
+		t.Fatalf("expected likely_human for trusted, got %s", first.Classification)
+	}
+
+	// Third result (invalid npub) should have error
+	var third map[string]interface{}
+	json.Unmarshal(resp.Results[2], &third)
+	if _, hasError := third["error"]; !hasError {
+		t.Fatal("expected error for invalid npub")
+	}
+
+	// Summary should have counts
+	if resp.Summary["errors"] != 1 {
+		t.Fatalf("expected 1 error in summary, got %d", resp.Summary["errors"])
+	}
+}
+
+func TestSpamBatchSummaryTotals(t *testing.T) {
+	oldGraph := graph
+	graph = NewGraph()
+	defer func() { graph = oldGraph }()
+
+	pubkeys := make([]string, 5)
+	for i := range pubkeys {
+		pubkeys[i] = padHex(3000 + i)
+	}
+
+	body, _ := json.Marshal(map[string][]string{"pubkeys": pubkeys})
+	req := httptest.NewRequest("POST", "/spam/batch", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	handleSpamBatch(w, req)
+
+	var resp struct {
+		Results []json.RawMessage `json:"results"`
+		Summary map[string]int    `json:"summary"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	total := resp.Summary["likely_human"] + resp.Summary["suspicious"] + resp.Summary["likely_spam"] + resp.Summary["errors"]
+	if total != 5 {
+		t.Fatalf("summary total should be 5, got %d", total)
 	}
 }
 

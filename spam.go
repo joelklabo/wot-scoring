@@ -27,6 +27,49 @@ type SpamResponse struct {
 	GraphSize      int          `json:"graph_size"`
 }
 
+// computeSpam analyzes a pubkey for spam indicators and returns a SpamResponse.
+func computeSpam(pubkey string, graphSize int) SpamResponse {
+	rawScore, found := graph.GetScore(pubkey)
+	score := normalizeScore(rawScore, graphSize)
+	percentile := graph.Percentile(pubkey)
+	followers := graph.GetFollowers(pubkey)
+	follows := graph.GetFollows(pubkey)
+	m := meta.Get(pubkey)
+
+	var signals []SpamSignal
+
+	signals = append(signals, spamSignalWoT(score, found, percentile))
+	signals = append(signals, spamSignalFollowRatio(len(followers), len(follows)))
+	signals = append(signals, spamSignalAge(m.FirstCreated))
+	signals = append(signals, spamSignalEngagement(m.ReactionsRecd, m.ZapCntRecd, m.PostCount))
+	signals = append(signals, spamSignalReports(m.ReportsRecd))
+	signals = append(signals, spamSignalActivity(m.PostCount, m.ReplyCount, m.ReactionsSent))
+
+	var spamProb float64
+	for _, s := range signals {
+		spamProb += s.Score
+	}
+	if spamProb > 1.0 {
+		spamProb = 1.0
+	}
+	if spamProb < 0.0 {
+		spamProb = 0.0
+	}
+	spamProb = math.Round(spamProb*1000) / 1000
+
+	classification := classifySpam(spamProb)
+	summary := spamSummary(classification, score, len(followers), m.ReportsRecd)
+
+	return SpamResponse{
+		Pubkey:          pubkey,
+		SpamProbability: spamProb,
+		Classification:  classification,
+		Signals:         signals,
+		Summary:         summary,
+		GraphSize:       graphSize,
+	}
+}
+
 // handleSpam analyzes a pubkey for spam indicators using WoT graph signals.
 func handleSpam(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("pubkey")
@@ -42,70 +85,95 @@ func handleSpam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := graph.Stats()
-	rawScore, found := graph.GetScore(pubkey)
-	score := normalizeScore(rawScore, stats.Nodes)
-	percentile := graph.Percentile(pubkey)
-	followers := graph.GetFollowers(pubkey)
-	follows := graph.GetFollows(pubkey)
-	m := meta.Get(pubkey)
-
-	var signals []SpamSignal
-
-	// Signal 1: WoT Score (weight: 0.30)
-	// Low trust score is a strong spam indicator.
-	wotSignal := spamSignalWoT(score, found, percentile)
-	signals = append(signals, wotSignal)
-
-	// Signal 2: Follower/Following ratio (weight: 0.15)
-	// Spammers follow many but have few followers.
-	ratioSignal := spamSignalFollowRatio(len(followers), len(follows))
-	signals = append(signals, ratioSignal)
-
-	// Signal 3: Account age (weight: 0.15)
-	// Very new accounts are more likely to be spam.
-	ageSignal := spamSignalAge(m.FirstCreated)
-	signals = append(signals, ageSignal)
-
-	// Signal 4: Engagement received (weight: 0.15)
-	// Real accounts receive reactions and zaps.
-	engagementSignal := spamSignalEngagement(m.ReactionsRecd, m.ZapCntRecd, m.PostCount)
-	signals = append(signals, engagementSignal)
-
-	// Signal 5: Reports received (weight: 0.15)
-	// Explicit spam reports are strong signals.
-	reportSignal := spamSignalReports(m.ReportsRecd)
-	signals = append(signals, reportSignal)
-
-	// Signal 6: Activity pattern (weight: 0.10)
-	// Bots post a lot but don't interact (no replies, no reactions sent).
-	activitySignal := spamSignalActivity(m.PostCount, m.ReplyCount, m.ReactionsSent)
-	signals = append(signals, activitySignal)
-
-	// Compute weighted spam probability
-	var spamProb float64
-	for _, s := range signals {
-		spamProb += s.Score
-	}
-	// Clamp to [0, 1]
-	if spamProb > 1.0 {
-		spamProb = 1.0
-	}
-	if spamProb < 0.0 {
-		spamProb = 0.0
-	}
-	spamProb = math.Round(spamProb*1000) / 1000
-
-	classification := classifySpam(spamProb)
-	summary := spamSummary(classification, score, len(followers), m.ReportsRecd)
+	resp := computeSpam(pubkey, stats.Nodes)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SpamResponse{
-		Pubkey:          pubkey,
-		SpamProbability: spamProb,
-		Classification:  classification,
-		Signals:         signals,
-		Summary:         summary,
-		GraphSize:       stats.Nodes,
+	json.NewEncoder(w).Encode(resp)
+}
+
+// SpamBatchResult is a compact result for batch spam checking.
+type SpamBatchResult struct {
+	Pubkey          string  `json:"pubkey"`
+	SpamProbability float64 `json:"spam_probability"`
+	Classification  string  `json:"classification"`
+	Summary         string  `json:"summary"`
+}
+
+// handleSpamBatch checks up to 100 pubkeys for spam in one request.
+// POST /spam/batch with JSON body: {"pubkeys": ["hex1", "hex2", ...]}
+func handleSpamBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Pubkeys []string `json:"pubkeys"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Pubkeys) == 0 {
+		http.Error(w, `{"error":"pubkeys array required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Pubkeys) > 100 {
+		http.Error(w, `{"error":"max 100 pubkeys per request"}`, http.StatusBadRequest)
+		return
+	}
+
+	stats := graph.Stats()
+	results := make([]interface{}, len(req.Pubkeys))
+
+	for i, raw := range req.Pubkeys {
+		pubkey, err := resolvePubkey(raw)
+		if err != nil {
+			results[i] = map[string]interface{}{
+				"pubkey": raw,
+				"error":  err.Error(),
+			}
+			continue
+		}
+
+		full := computeSpam(pubkey, stats.Nodes)
+		results[i] = SpamBatchResult{
+			Pubkey:          pubkey,
+			SpamProbability: full.SpamProbability,
+			Classification:  full.Classification,
+			Summary:         full.Summary,
+		}
+	}
+
+	// Count classifications
+	var human, suspicious, spam, errors int
+	for _, r := range results {
+		switch v := r.(type) {
+		case SpamBatchResult:
+			switch v.Classification {
+			case "likely_human":
+				human++
+			case "suspicious":
+				suspicious++
+			case "likely_spam":
+				spam++
+			}
+		default:
+			errors++
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results":    results,
+		"count":      len(results),
+		"graph_size": stats.Nodes,
+		"summary": map[string]int{
+			"likely_human": human,
+			"suspicious":   suspicious,
+			"likely_spam":  spam,
+			"errors":       errors,
+		},
 	})
 }
 

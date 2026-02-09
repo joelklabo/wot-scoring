@@ -51,6 +51,8 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/nip05/reverse": 2,
 			"/timeline":      2,
 			"/spam":          2,
+			"/spam/batch":    10,
+			"/weboftrust":    3,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),
