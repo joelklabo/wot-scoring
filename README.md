@@ -67,6 +67,7 @@ GET /reputation?pubkey=<hex> — Composite reputation score (0-100, grade A-F, 5
 GET /predict?source=<hex>&target=<hex> — Link prediction (5 graph signals, prediction score, mutual connections)
 GET /influence?pubkey=<hex>&other=<hex> — Influence propagation (differential PageRank what-if analysis)
 GET /network-health          — Network topology health (degree stats, connectivity, Gini, hubs, health score)
+WS  /ws/scores               — Real-time score streaming via WebSocket (subscribe to pubkey updates)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
