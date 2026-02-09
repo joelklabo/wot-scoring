@@ -67,6 +67,11 @@ GET /reputation?pubkey=<hex> — Composite reputation score (0-100, grade A-F, 5
 GET /predict?source=<hex>&target=<hex> — Link prediction (5 graph signals, prediction score, mutual connections)
 GET /influence?pubkey=<hex>&other=<hex> — Influence propagation (differential PageRank what-if analysis)
 GET /network-health          — Network topology health (degree stats, connectivity, Gini, hubs, health score)
+GET /trust-circle?pubkey=<hex> — Trust circle analysis: mutual follows, cohesion, density, member roles
+GET /trust-circle/compare?pubkey1=<hex>&pubkey2=<hex> — Compare trust circles: overlap, Jaccard, compatibility
+GET /follow-quality?pubkey=<hex> — Follow list quality: diversity, ghost ratio, categorization, suggestions
+GET /influence/batch          — Batch influence scoring for up to 50 pubkeys (network role, reach, tier)
+GET /compare-providers?pubkey=<hex> — Cross-provider NIP-85 score comparison with consensus metrics
 WS  /ws/scores               — Real-time score streaming via WebSocket (subscribe to pubkey updates)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
@@ -77,16 +82,27 @@ POST /publish                — Publish NIP-85 kind 30382/30383/30384/30385 + N
 
 ## Interactive UI
 
-The landing page at [wot.klabo.world](https://wot.klabo.world) includes three interactive tools:
+The landing page at [wot.klabo.world](https://wot.klabo.world) includes interactive trust analysis tools. The [demo dashboard](https://wot.klabo.world/demo) provides 13 live cards calling 14 API endpoints with 10 parallel fetches per search:
 
 - **Score Lookup** — Enter any npub or hex pubkey to see trust score, followers, posts, reactions, zaps
 - **Trust Leaderboard** — Top 10 scored pubkeys with live rank, score, and follower counts
 - **Trust Communities** — Visualize detected trust clusters with member counts and top-ranked members
-- **Compare** — Side-by-side comparison of two pubkeys with relationship badges (mutual follow, shared follows, trusted followers) and bar charts
+- **Compare** — Side-by-side comparison of two pubkeys with relationship badges and bar charts
 - **Trust Path** — BFS shortest-path visualization showing each hop with WoT scores between any two pubkeys
 - **Timeline** — Trust evolution visualization showing monthly follower growth bars with velocity coloring
 - **Spam Check** — Multi-signal spam probability analysis with per-signal breakdown bars
-- **Trust Graph** — Interactive force-directed SVG visualization of a pubkey's trust network (follows, followers, mutual connections)
+- **Trust Graph** — Interactive force-directed SVG visualization of a pubkey's trust network
+- **Follow Quality** — Follow list quality score with entropy-based diversity, ghost ratio, and suggestions
+- **Trust Circle Compare** — Trust circle compatibility with Jaccard coefficient and shared connections
+- **Network Health** — Auto-loading network-wide metrics: 51k nodes, 620k edges, Gini coefficient, power-law exponent
+- **Anomaly Detection** — Suspicious pattern analysis with risk classification
+- **Link Prediction** — "People you may know" with 5 graph-theoretic signals
+- **Score Audit** — Full PageRank breakdown: rank, percentile, top followers, engagement metrics
+- **Recommended Follows** — Friends-of-friends recommendations with mutual counts and WoT scores
+
+## Client SDK
+
+[nostr-wot](https://github.com/joelklabo/nostr-wot) — zero-dependency JavaScript client library with TypeScript declarations and L402 payment support. Covers all 48 endpoints.
 
 ## Run
 
