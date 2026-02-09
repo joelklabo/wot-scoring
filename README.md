@@ -32,6 +32,7 @@ GET /health                  — Health check (status, graph size, uptime)
 GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382) + composite from external providers
 GET /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch                  — Score up to 100 pubkeys in one request (JSON: {"pubkeys":[...]})
+GET /similar?pubkey=<hex>    — Find similar pubkeys by follow-graph overlap
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
@@ -229,6 +230,34 @@ Response:
 ```
 
 **Formula:** 50% global PageRank + 50% social proximity (direct follow: +40, mutual: +10, trusted follower ratio: up to +50).
+
+## Similar Pubkey Discovery
+
+Find pubkeys with the most overlapping follow graphs — useful for recommendations and discovery:
+
+```
+GET /similar?pubkey=<hex|npub>&limit=20
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827...",
+  "similar": [
+    {
+      "pubkey": "82341f...",
+      "similarity": 0.218,
+      "shared_follows": 293,
+      "wot_score": 21
+    }
+  ],
+  "total_found": 20,
+  "graph_size": 51446
+}
+```
+
+**Algorithm:** Jaccard similarity of follow sets (|intersection| / |union|), weighted 70% similarity + 30% WoT PageRank score. Minimum 3 follows required. Max 50 results.
 
 ## Batch Scoring
 
