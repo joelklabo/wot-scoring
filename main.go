@@ -2445,6 +2445,46 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== LINK PREDICTION ===== -->
+<h2 id="link-prediction">Link Prediction</h2>
+<p class="section-intro">Graph-theoretic link prediction. Estimate the likelihood of a follow relationship forming between any two pubkeys using five complementary signals from the social graph.</p>
+
+<div class="endpoint-card" id="ep-predict">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/predict</span>
+<span class="price-tag">3 sats</span>
+</div>
+<div class="desc">Predict whether source will follow target using five signals: Common Neighbors (shared connections), Adamic-Adar Index (rarity-weighted common connections), Preferential Attachment (degree product), Jaccard Coefficient (neighborhood overlap), and WoT Score Proximity (trust score similarity). Returns prediction (0-1), confidence, classification, per-signal breakdown, and top mutual connections.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">source</span><span class="param-type">string</span><span class="param-desc">Source hex pubkey or npub <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">target</span><span class="param-type">string</span><span class="param-desc">Target hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "source": "32e1827635...",
+  "target": "82341f882b...",
+  "already_follows": false,
+  "prediction": 0.672,
+  "confidence": 0.95,
+  "classification": "likely",
+  "signals": [
+    {"name": "common_neighbors", "raw_value": 15, "normalized": 0.75, "weight": 0.30, "description": "15 shared connections"},
+    {"name": "adamic_adar", "raw_value": 3.42, "normalized": 0.684, "weight": 0.25, "description": "Weighted common neighbors"},
+    {"name": "preferential_attachment", "raw_value": 125000, "normalized": 0.64, "weight": 0.10, "description": "500 × 250 = 125000"},
+    {"name": "jaccard_coefficient", "raw_value": 0.12, "normalized": 0.12, "weight": 0.20, "description": "Neighborhood overlap: 45 / 375"},
+    {"name": "wot_proximity", "raw_value": 0.92, "normalized": 0.92, "weight": 0.15, "description": "Trust scores: source=78, target=86"}
+  ],
+  "top_mutuals": [
+    {"pubkey": "abc123...", "wot_score": 82}
+  ],
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2934,7 +2974,7 @@ footer a:hover{text-decoration:underline}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
-<div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil</span></div>
+<div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil, /predict</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
@@ -3486,6 +3526,7 @@ func main() {
 	http.HandleFunc("/sybil/batch", handleSybilBatch)
 	http.HandleFunc("/trust-path", handleTrustPath)
 	http.HandleFunc("/reputation", handleReputation)
+	http.HandleFunc("/predict", handlePredict)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

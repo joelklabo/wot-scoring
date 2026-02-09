@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 34 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 40 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 39 endpoints serve live data. 314 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, multi-hop trust path analysis, composite reputation scoring, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 40 endpoints serve live data. 329 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, multi-hop trust path analysis, composite reputation scoring, link prediction, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -53,6 +53,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Mute list analysis** (`/blocked`) — NIP-51 kind 10000 mute list integration providing two modes: (1) who a pubkey has muted, and (2) who has muted a target pubkey. The reverse lookup produces a "community moderation signal" — when multiple high-WoT users have independently blocked the same pubkey, it's a strong negative trust indicator. Signals range from "no_data" through "weak_negative", "moderate_negative", to "strong_negative". Each entry includes WoT scores for context. This bridges NIP-51 (mute lists) with NIP-85 (trust assertions), adding negative trust signals that complement the positive signals from follows and engagement.
 - **Cross-provider assertion verification** (`POST /verify`) — accepts any NIP-85 kind 30382 event as JSON, verifies its cryptographic signature and event ID, then cross-references claimed rank and follower count against our own graph data. Returns a verdict: "consistent" (claims match within tolerance), "divergent" (significant disagreement), "unverifiable" (no verifiable claims), or "invalid" (bad signature/structure). Each field check includes both the claimed and observed values. This is the first known NIP-85 cross-provider verification endpoint — enabling clients to assess whether multiple independent providers agree on a pubkey's trust profile.
 - **Trust anomaly detection** (`/anomalies`) — analyzes a pubkey's trust graph for five classes of suspicious patterns: follow-farming (high follow-back ratio), ghost/bot followers (low-score followers), trust concentration (single-source PageRank dependency), score-follower divergence (many followers but low PageRank suggesting low-quality followers), and excessive following. Each detected anomaly includes type, severity (low/medium/high), human-readable description, the triggering metric value, and its threshold. Returns an overall risk level (clean/low/medium/high). Top-1% accounts are exempt from ghost-follower flags since high ghost ratios are expected for very popular accounts.
+- **Link prediction** (`/predict`) — graph-theoretic link prediction using five complementary signals: Common Neighbors (shared connections between two pubkeys), Adamic-Adar Index (rarity-weighted common connections — rare bridges count more), Preferential Attachment (degree product reflecting social gravity), Jaccard Coefficient (neighborhood overlap ratio), and WoT Score Proximity (trust score similarity). Returns a prediction score (0-1), confidence level, classification (very_likely to very_unlikely), per-signal breakdown with raw values and weights, and top mutual connections. Useful for "people you may know" features in Nostr clients.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
@@ -119,8 +120,16 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 | `/audit` | 5 sats | 10/day per IP |
 | `/nip05/batch` | 5 sats | 10/day per IP |
 | `/spam/batch` | 10 sats | 10/day per IP |
+| `/timeline` | 2 sats | 10/day per IP |
+| `/verify` | 2 sats | 10/day per IP |
 | `/weboftrust` | 3 sats | 10/day per IP |
+| `/anomalies` | 3 sats | 10/day per IP |
+| `/sybil` | 3 sats | 10/day per IP |
+| `/predict` | 3 sats | 10/day per IP |
+| `/trust-path` | 5 sats | 10/day per IP |
+| `/reputation` | 5 sats | 10/day per IP |
 | `/batch` | 10 sats | 10/day per IP |
+| `/sybil/batch` | 10 sats | 10/day per IP |
 
 **How it works:**
 1. First 10 requests/day per IP are free (no payment needed)

@@ -47,7 +47,8 @@ const openAPISpec = `{
     {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"},
     {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"},
     {"name": "Trust Paths", "description": "Multi-hop trust path analysis with scoring and diversity metrics"},
-    {"name": "Reputation", "description": "Composite reputation scoring combining WoT, Sybil resistance, community, and anomaly analysis"}
+    {"name": "Reputation", "description": "Composite reputation scoring combining WoT, Sybil resistance, community, and anomaly analysis"},
+    {"name": "Link Prediction", "description": "Graph-theoretic link prediction for follow relationship likelihood"}
   ],
   "paths": {
     "/score": {
@@ -658,6 +659,23 @@ const openAPISpec = `{
           "200": {"description": "Reputation profile with composite score, grade, component breakdown, and summary"},
           "400": {"description": "Missing or invalid pubkey"},
           "402": {"description": "L402 payment required (5 sats)"}
+        }
+      }
+    },
+    "/predict": {
+      "get": {
+        "tags": ["Link Prediction"],
+        "operationId": "predictLink",
+        "summary": "Predict whether a follow relationship will form between two pubkeys",
+        "description": "Uses five graph-theoretic link prediction signals (Common Neighbors, Adamic-Adar Index, Preferential Attachment, Jaccard Coefficient, WoT Score Proximity) to estimate the likelihood of a follow relationship forming. Returns a prediction score (0-1), confidence, classification, per-signal breakdown, and top mutual connections.",
+        "parameters": [
+          {"name": "source", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Source hex pubkey or npub"},
+          {"name": "target", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Target hex pubkey or npub"}
+        ],
+        "responses": {
+          "200": {"description": "Link prediction with signal breakdown and mutual connections"},
+          "400": {"description": "Missing, invalid, or identical pubkeys"},
+          "402": {"description": "L402 payment required (3 sats)"}
         }
       }
     },
