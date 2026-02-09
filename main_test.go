@@ -168,3 +168,114 @@ func TestHandlePersonalizedMissingParams(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleSimilar(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	// alice follows: bob, carol, dave
+	// eve follows: bob, carol, frank
+	// mallory follows: zara (no overlap)
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("alice", "carol")
+	graph.AddFollow("alice", "dave")
+	graph.AddFollow("eve", "bob")
+	graph.AddFollow("eve", "carol")
+	graph.AddFollow("eve", "frank")
+	graph.AddFollow("mallory", "zara")
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/similar?pubkey=alice", nil)
+	w := httptest.NewRecorder()
+	handleSimilar(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	similar, ok := resp["similar"].([]interface{})
+	if !ok {
+		t.Fatal("expected similar array in response")
+	}
+
+	// eve should be the most similar (shares bob + carol)
+	if len(similar) == 0 {
+		t.Fatal("expected at least 1 similar result")
+	}
+
+	first := similar[0].(map[string]interface{})
+	if first["pubkey"] != "eve" {
+		t.Errorf("expected eve as most similar, got %s", first["pubkey"])
+	}
+	if first["shared_follows"].(float64) != 2 {
+		t.Errorf("expected 2 shared follows, got %v", first["shared_follows"])
+	}
+
+	// mallory should NOT appear (only 1 follow = below min threshold of 3)
+	for _, s := range similar {
+		entry := s.(map[string]interface{})
+		if entry["pubkey"] == "mallory" {
+			t.Error("mallory should not appear (< 3 follows)")
+		}
+	}
+}
+
+func TestHandleSimilarMissingPubkey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/similar", nil)
+	w := httptest.NewRecorder()
+	handleSimilar(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleSimilarNonexistentPubkey(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/similar?pubkey=nonexistent", nil)
+	w := httptest.NewRecorder()
+	handleSimilar(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "pubkey has no follows in graph" {
+		t.Errorf("expected error message for nonexistent pubkey, got %v", resp["error"])
+	}
+}
+
+func TestGraphAllFollowers(t *testing.T) {
+	g := NewGraph()
+	g.AddFollow("alice", "bob")
+	g.AddFollow("carol", "dave")
+
+	all := g.AllFollowers()
+	if len(all) != 2 {
+		t.Fatalf("expected 2, got %d", len(all))
+	}
+
+	// Both alice and carol should be in the list (they have follows)
+	found := make(map[string]bool)
+	for _, pk := range all {
+		found[pk] = true
+	}
+	if !found["alice"] {
+		t.Error("expected alice in AllFollowers")
+	}
+	if !found["carol"] {
+		t.Error("expected carol in AllFollowers")
+	}
+}

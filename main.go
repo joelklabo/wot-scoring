@@ -128,6 +128,17 @@ func (g *Graph) TopN(n int) []ScoreEntry {
 	return entries
 }
 
+// AllFollowers returns all pubkeys that have a follows list (active users with contact lists).
+func (g *Graph) AllFollowers() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	result := make([]string, 0, len(g.follows))
+	for k := range g.follows {
+		result = append(result, k)
+	}
+	return result
+}
+
 func (g *Graph) Stats() GraphStats {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -452,6 +463,133 @@ func handlePersonalized(w http.ResponseWriter, r *http.Request) {
 		"trusted_follower_sample": trustedFollowerList,
 		"shared_follows":      sharedFollows,
 		"graph_size":          stats.Nodes,
+	})
+}
+
+func handleSimilar(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("pubkey")
+	if raw == "" {
+		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	pubkey, err := resolvePubkey(raw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if n, err := fmt.Sscanf(limitStr, "%d", &limit); n != 1 || err != nil || limit < 1 {
+			limit = 20
+		}
+		if limit > 50 {
+			limit = 50
+		}
+	}
+
+	targetFollows := graph.GetFollows(pubkey)
+	if len(targetFollows) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pubkey":  pubkey,
+			"similar": []interface{}{},
+			"error":   "pubkey has no follows in graph",
+		})
+		return
+	}
+
+	// Build set of target's follows for fast lookup
+	targetSet := make(map[string]bool, len(targetFollows))
+	for _, f := range targetFollows {
+		targetSet[f] = true
+	}
+
+	stats := graph.Stats()
+
+	// Compare with all other pubkeys that have follows
+	type candidate struct {
+		Pubkey     string
+		Jaccard    float64
+		Shared     int
+		TotalUnion int
+		WotScore   int
+	}
+
+	allPubkeys := graph.AllFollowers()
+	candidates := make([]candidate, 0, 256)
+
+	for _, pk := range allPubkeys {
+		if pk == pubkey {
+			continue
+		}
+		pkFollows := graph.GetFollows(pk)
+		if len(pkFollows) < 3 {
+			continue // skip very low-activity accounts
+		}
+
+		// Compute Jaccard similarity: |intersection| / |union|
+		shared := 0
+		for _, f := range pkFollows {
+			if targetSet[f] {
+				shared++
+			}
+		}
+		if shared == 0 {
+			continue
+		}
+
+		union := len(targetSet) + len(pkFollows) - shared
+		jaccard := float64(shared) / float64(union)
+
+		rawScore, _ := graph.GetScore(pk)
+		wotScore := normalizeScore(rawScore, stats.Nodes)
+
+		candidates = append(candidates, candidate{
+			Pubkey:     pk,
+			Jaccard:    jaccard,
+			Shared:     shared,
+			TotalUnion: union,
+			WotScore:   wotScore,
+		})
+	}
+
+	// Sort by weighted score: 70% Jaccard similarity + 30% WoT score (normalized to 0-1)
+	sort.Slice(candidates, func(i, j int) bool {
+		scoreI := candidates[i].Jaccard*0.7 + float64(candidates[i].WotScore)/100.0*0.3
+		scoreJ := candidates[j].Jaccard*0.7 + float64(candidates[j].WotScore)/100.0*0.3
+		return scoreI > scoreJ
+	})
+
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	type resultEntry struct {
+		Pubkey       string  `json:"pubkey"`
+		Similarity   float64 `json:"similarity"`
+		SharedFollows int    `json:"shared_follows"`
+		WotScore     int     `json:"wot_score"`
+	}
+
+	results := make([]resultEntry, len(candidates))
+	for i, c := range candidates {
+		results[i] = resultEntry{
+			Pubkey:        c.Pubkey,
+			Similarity:    math.Round(c.Jaccard*1000) / 1000, // 3 decimal places
+			SharedFollows: c.Shared,
+			WotScore:      c.WotScore,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pubkey":      pubkey,
+		"similar":     results,
+		"total_found": len(candidates),
+		"graph_size":  stats.Nodes,
 	})
 }
 
@@ -1071,6 +1209,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust score + metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/personalized?viewer=&lt;hex&gt;&amp;target=&lt;hex&gt;</span><span class="desc">— Personalized trust score</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/batch</span><span class="desc">— Score multiple pubkeys at once</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/similar?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Find similar pubkeys by follow overlap</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
@@ -1232,6 +1371,7 @@ func main() {
 	http.HandleFunc("/score", handleScore)
 	http.HandleFunc("/batch", handleBatch)
 	http.HandleFunc("/personalized", handlePersonalized)
+	http.HandleFunc("/similar", handleSimilar)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
 	http.HandleFunc("/export", handleExport)
@@ -1263,6 +1403,7 @@ func main() {
 			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382), with composite scoring from external providers
 /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["hex1","hex2",...]})
+/similar?pubkey=<hex> — Find similar pubkeys by follow-graph overlap (Jaccard + WoT weighted)
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)
