@@ -2253,6 +2253,46 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<div class="endpoint-card" id="ep-anomalies">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/anomalies</span>
+<span class="price-tag">3 sats</span>
+</div>
+<div class="desc">Trust anomaly detection: analyzes a pubkey's trust graph for suspicious patterns including follow-farming (high follow-back ratio), ghost/bot followers (zero-score followers), trust concentration (single-source dependency), score-follower divergence, and excessive following. Returns individual anomaly flags with severity levels and an overall risk assessment.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub to analyze <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "abc123...",
+  "score": 42,
+  "rank": 1500,
+  "followers": 500,
+  "follows": 480,
+  "follow_back_ratio": 0.96,
+  "ghost_followers": 350,
+  "ghost_ratio": 0.7,
+  "top_follower_share": 0.15,
+  "score_percentile": 0.85,
+  "anomalies": [
+    {
+      "type": "follow_farming",
+      "severity": "high",
+      "description": "Follows back 96% of 500 followers...",
+      "value": 0.96,
+      "threshold": 0.9
+    }
+  ],
+  "anomaly_count": 1,
+  "risk_level": "high",
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2729,6 +2769,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/weboftrust?pubkey=&lt;hex|npub&gt;</span><span class="desc">— D3.js-compatible trust graph visualization</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/timeline?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Historical trust growth timeline</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/verify</span><span class="desc">— Cross-provider NIP-85 assertion verification</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/anomalies?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust anomaly detection and risk assessment</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -2738,7 +2779,7 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify, /weboftrust (3 sats)</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify, /weboftrust (3 sats), /anomalies (3 sats)</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
@@ -3285,6 +3326,7 @@ func main() {
 	http.HandleFunc("/weboftrust", handleWebOfTrust)
 	http.HandleFunc("/blocked", handleBlocked)
 	http.HandleFunc("/verify", handleVerify)
+	http.HandleFunc("/anomalies", handleAnomalies)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

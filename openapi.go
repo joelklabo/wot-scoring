@@ -564,6 +564,22 @@ const openAPISpec = `{
         }
       }
     },
+    "/anomalies": {
+      "get": {
+        "tags": ["Trust Analysis"],
+        "operationId": "getAnomalies",
+        "summary": "Trust anomaly detection for a pubkey",
+        "description": "Analyzes a pubkey's trust graph for anomalous patterns: follow-farming (high follow-back ratio), ghost/bot followers (zero-score followers), trust concentration (single-source dependency), score-follower divergence (many followers but low PageRank), and excessive following. Returns individual anomaly flags with severity levels and an overall risk assessment.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Hex pubkey or npub to analyze"}
+        ],
+        "responses": {
+          "200": {"description": "Anomaly analysis with risk level and individual flags"},
+          "400": {"description": "Missing or invalid pubkey"},
+          "402": {"description": "L402 payment required (3 sats)"}
+        }
+      }
+    },
     "/docs": {
       "get": {
         "tags": ["Infrastructure"],

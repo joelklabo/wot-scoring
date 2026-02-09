@@ -55,6 +55,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/weboftrust":    3,
 			"/blocked":       2,
 			"/verify":        2,
+			"/anomalies":     3,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),
