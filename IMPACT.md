@@ -13,11 +13,17 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30384 — Addressable Event Assertions.** Engagement scoring for long-form articles (kind 30023) and live activities (kind 30311).
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 17 API endpoints, auto re-crawls every 6 hours, publishes to 3 relays.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 21 API endpoints, auto re-crawls every 6 hours, publishes to 3 relays.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 17 endpoints serve live data. 175 automated tests pass in CI. The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 21 endpoints serve live data. 147 automated tests pass in CI (including L402 paywall tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+
+Interactive UI features:
+- **Score Lookup** — real-time trust score search with live debounced queries
+- **Compare** — side-by-side trust comparison with relationship badges and shared follow analysis
+- **Trust Path** — BFS shortest path visualization between any two pubkeys
+- **Leaderboard** — top 10 pubkeys with live data from the scoring API
 
 ## Depth & Innovation
 
@@ -25,17 +31,20 @@ Beyond standard PageRank scoring, we implemented:
 
 - **Personalized trust scoring** (`/personalized`) — scores a target pubkey relative to any viewer's follow graph, blending global PageRank (50%) with social proximity (50%). This enables per-user trust assessments without clients running their own graph computations.
 - **Composite scoring from multiple providers** — consumes kind 30382 events from external NIP-85 providers and blends them into a composite score (70% internal + 30% external average). This is true multi-provider NIP-85 interoperability.
+- **Time-decay scoring** (`/decay`) — exponential decay where newer follows weigh more, with configurable half-life. Reveals emerging trust vs. legacy reputation. `/decay/top` shows rank changes vs. static PageRank.
 - **Score auditing** (`/audit`) — full transparency into why a pubkey has its score, including PageRank breakdown, engagement metrics, top followers, and external assertion details.
-- **Trust path finder** (`/graph`) — BFS shortest path between any two pubkeys through the follow graph, showing trust chains.
-- **Follow recommendations** (`/recommend`) — friends-of-friends analysis for discovery.
-- **Relay trust assessment** (`/relay`) — combines infrastructure trust data from trustedrelays.xyz with operator social reputation from PageRank.
+- **Trust path finder** (`/graph`) — BFS shortest path between any two pubkeys through the follow graph, showing trust chains up to 6 hops.
+- **Follow recommendations** (`/recommend`) — friends-of-friends analysis weighted by mutual follow ratio (60%) and WoT score (40%).
+- **Similar pubkey discovery** (`/similar`) — Jaccard similarity (70%) + WoT score (30%) for finding pubkeys with overlapping follow graphs.
+- **Relay trust assessment** (`/relay`) — combines infrastructure trust data from trustedrelays.xyz with operator social reputation from PageRank (70/30 blend).
+- **Trust comparison** (`/compare`) — side-by-side comparison showing direct relationship, shared follows, Jaccard similarity, and trust path.
 
 ## Interoperability
 
 - **Publishes** all four NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net)
 - **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
 - **NIP-89 handler** published on startup for automatic client discovery
-- **Batch API** for clients that need to score many pubkeys at once
+- **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 
@@ -58,21 +67,39 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 175 tests covering scoring, normalization, event parsing, relay trust, and API handlers
+- 147 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability
 
-**Freemium API model.** The HTTP API is free for public queries at low volume. High-volume consumers (clients checking thousands of pubkeys daily) would use the batch endpoint under a paid tier. Revenue model:
+**L402 Lightning Paywall — implemented and deployed.**
 
-1. **Free tier** — public API, rate-limited, suitable for individual clients and small apps
-2. **Paid tier** — higher rate limits, SLA guarantees, priority crawl scheduling, custom seed sets for personalized scoring
-3. **NIP-85 assertion subscriptions** — relay-based delivery requires no API; clients pay relay operators, not us. Our revenue comes from the HTTP API convenience layer.
-4. **Consulting** — custom trust models, private deployments for organizations that want their own scoring instance
+The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Network micropayments via LNbits. This is a working, Bitcoin-native revenue model — not a hypothetical future plan.
+
+**Pricing:**
+
+| Endpoint | Price | Free Tier |
+|----------|-------|-----------|
+| `/score` | 1 sat | 10/day per IP |
+| `/decay` | 1 sat | 10/day per IP |
+| `/personalized` | 2 sats | 10/day per IP |
+| `/similar` | 2 sats | 10/day per IP |
+| `/recommend` | 2 sats | 10/day per IP |
+| `/compare` | 2 sats | 10/day per IP |
+| `/audit` | 5 sats | 10/day per IP |
+| `/batch` | 10 sats | 10/day per IP |
+
+**How it works:**
+1. First 10 requests/day per IP are free (no payment needed)
+2. After free tier: API returns HTTP 402 with a Lightning invoice
+3. Client pays invoice, retries request with `X-Payment-Hash` header
+4. Server verifies payment via LNbits, serves the response
+
+Unpriced endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`) remain free and unlimited.
 
 **Cost structure:** Near-zero. Single Go binary, no database, no external API costs. Hosting is a single VPS or Cloudflare Tunnel. The only variable cost is relay bandwidth, which scales linearly and is negligible at current volumes.
 
-**Market:** Every Nostr client needs spam filtering and trust signals. As the protocol grows, the demand for shared trust infrastructure grows with it. NIP-85 is the standard; we're the reference implementation.
+**Market:** Every Nostr client needs spam filtering and trust signals. As the protocol grows, the demand for shared trust infrastructure grows with it. NIP-85 is the standard; we're the reference implementation. The L402 paywall ensures the service sustains itself from the ecosystem it serves.
 
 ## Source Code
 

@@ -538,6 +538,38 @@ Response:
 
 The `/decay/top` endpoint shows how rankings shift when freshness is factored in — who gains rank (recently followed) vs who loses rank (legacy follows fading).
 
+## L402 Lightning Paywall
+
+The API supports the [L402 protocol](https://docs.lightning.engineering/the-lightning-network/l402) for pay-per-query access via Lightning Network micropayments.
+
+**Free tier:** 10 requests/day per IP on priced endpoints. No payment needed.
+
+**Priced endpoints:**
+
+| Endpoint | Price |
+|----------|-------|
+| `/score`, `/decay` | 1 sat |
+| `/personalized`, `/similar`, `/recommend`, `/compare` | 2 sats |
+| `/audit` | 5 sats |
+| `/batch` | 10 sats |
+
+All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`) are free and unlimited.
+
+**Usage flow:**
+
+```bash
+# Free tier (first 10 requests/day)
+curl https://wot.klabo.world/score?pubkey=<hex>
+
+# After free tier: returns 402 with invoice
+# Response: {"status":"payment_required","invoice":"lnbc...","payment_hash":"abc123","amount_sats":1}
+
+# Pay the invoice, then retry with payment hash
+curl -H "X-Payment-Hash: abc123" https://wot.klabo.world/score?pubkey=<hex>
+```
+
+**Configuration:** Set `LNBITS_URL` and `LNBITS_KEY` environment variables to enable. Without these, the paywall is disabled and all endpoints are free.
+
 ## Built for
 
 [WoT-a-thon](https://nosfabrica.com/wotathon/) hackathon — Web of Trust tools for Nostr.

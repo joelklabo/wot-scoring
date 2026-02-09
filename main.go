@@ -1934,6 +1934,19 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/health</span><span class="desc">— Health check</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
+</div>
+
+<div class="nip85-kinds" style="margin-top:2rem">
+<h2 style="font-size:1.3rem;color:#fff;margin-bottom:1rem">L402 Lightning Paywall</h2>
+<p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
+<div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit</span></div>
+<div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
+</div>
+<p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
 </div>
 
 <footer>
@@ -2297,6 +2310,16 @@ POST /publish — Publish NIP-85 kind 30382/30383/30384/30385 events to relays`,
 	limiter := NewRateLimiter(100, time.Minute)
 	log.Printf("Rate limiting enabled: 100 req/min per IP")
 
+	// Build handler chain: CORS -> Rate Limit -> L402 -> handlers
+	var handler http.Handler = http.DefaultServeMux
+	if L402Enabled() {
+		l402 := NewL402FromEnv()
+		handler = l402.Wrap(handler)
+		log.Printf("L402 paywall enabled: %d free requests/day per IP, paid via Lightning", l402.config.FreeTier)
+	} else {
+		log.Printf("L402 paywall disabled (set LNBITS_URL and LNBITS_KEY to enable)")
+	}
+
 	log.Printf("WoT Scoring API listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, RateLimitMiddleware(limiter, corsMiddleware(http.DefaultServeMux))))
+	log.Fatal(http.ListenAndServe(":"+port, RateLimitMiddleware(limiter, corsMiddleware(handler))))
 }
