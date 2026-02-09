@@ -215,6 +215,8 @@ var meta = NewMetaStore()
 var events = NewEventStore()
 var external = NewExternalStore()
 var externalAssertions = NewAssertionStore()
+var authStore = NewAuthStore()
+var communities = NewCommunityDetector()
 var startTime = time.Now()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
@@ -1198,6 +1200,108 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func handleAuthorized(w http.ResponseWriter, r *http.Request) {
+	pubkey := r.URL.Query().Get("pubkey")
+
+	// If no pubkey specified, show our own authorized users
+	if pubkey == "" {
+		// Get our own pubkey
+		ownPub := ""
+		if nsec, err := getNsec(); err == nil {
+			if _, pub, err := decodeKey(nsec); err == nil {
+				ownPub = pub
+			}
+		}
+		if ownPub == "" {
+			http.Error(w, `{"error":"provider pubkey not available"}`, http.StatusInternalServerError)
+			return
+		}
+		pubkey = ownPub
+	}
+
+	users := authStore.AuthorizedUsers(pubkey)
+	count := authStore.AuthorizedCount(pubkey)
+
+	// Enrich with scores
+	type AuthUser struct {
+		Pubkey string `json:"pubkey"`
+		Rank   int    `json:"rank"`
+	}
+	stats := graph.Stats()
+	enriched := make([]AuthUser, 0, len(users))
+	for _, u := range users {
+		score, _ := graph.GetScore(u)
+		enriched = append(enriched, AuthUser{
+			Pubkey: u,
+			Rank:   normalizeScore(score, stats.Nodes),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"provider":            pubkey,
+		"authorized_users":    enriched,
+		"authorized_count":    count,
+		"total_users":         authStore.TotalUsers(),
+		"total_authorizations": authStore.TotalAuthorizations(),
+	})
+}
+
+func handleCommunities(w http.ResponseWriter, r *http.Request) {
+	pubkey := r.URL.Query().Get("pubkey")
+
+	if pubkey != "" {
+		// Show community for a specific pubkey
+		label, ok := communities.GetCommunity(pubkey)
+		if !ok {
+			http.Error(w, `{"error":"pubkey not found in community graph"}`, http.StatusNotFound)
+			return
+		}
+
+		members := communities.GetCommunityMembers(pubkey)
+		stats := graph.Stats()
+
+		type MemberEntry struct {
+			Pubkey string `json:"pubkey"`
+			Rank   int    `json:"rank"`
+		}
+
+		// Sort by score, limit to top 20
+		memberEntries := make([]MemberEntry, 0, len(members))
+		for _, m := range members {
+			score, _ := graph.GetScore(m)
+			memberEntries = append(memberEntries, MemberEntry{
+				Pubkey: m,
+				Rank:   normalizeScore(score, stats.Nodes),
+			})
+		}
+		sort.Slice(memberEntries, func(i, j int) bool {
+			return memberEntries[i].Rank > memberEntries[j].Rank
+		})
+		if len(memberEntries) > 20 {
+			memberEntries = memberEntries[:20]
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pubkey":       pubkey,
+			"community_id": label,
+			"size":         len(members),
+			"top_members":  memberEntries,
+		})
+		return
+	}
+
+	// No pubkey: return top communities
+	top := communities.TopCommunities(graph, 20, 5)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total_communities": communities.TotalCommunities(),
+		"top":               top,
+	})
+}
+
 // getNsec reads the nsec from env or 1Password
 func getNsec() (string, error) {
 	if nsec := os.Getenv("NOSTR_NSEC"); nsec != "" {
@@ -1792,8 +1896,15 @@ footer a:hover{text-decoration:underline}
 </table>
 </div>
 
+<div class="leaderboard">
+<h2>Trust Communities</h2>
+<p style="color:#888;font-size:.85rem;margin-bottom:1rem">Clusters detected via label propagation over the follow graph</p>
+<div id="communities-list" style="color:#555">Loading communities...</div>
+</div>
+
 <div class="nip85">
-<h2>NIP-85 Assertion Kinds</h2>
+<h2>NIP-85 Event Kinds</h2>
+<div class="kind"><span class="kind-num">10040</span><span class="kind-desc">Provider Authorization — users declare trust in this service for WoT calculations</span></div>
 <div class="kind"><span class="kind-num">30382</span><span class="kind-desc">User Trust Assertions — PageRank score, follower count, post/reply/reaction/zap stats</span></div>
 <div class="kind"><span class="kind-num">30383</span><span class="kind-desc">Event Assertions — engagement scores for individual notes (comments, reposts, reactions, zaps)</span></div>
 <div class="kind"><span class="kind-num">30384</span><span class="kind-desc">Addressable Event Assertions — scores for articles (kind 30023) and live activities (kind 30311)</span></div>
@@ -1817,6 +1928,8 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/compare?a=&lt;pubkey&gt;&amp;b=&lt;pubkey&gt;</span><span class="desc">— Compare two pubkeys trust relationship</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/decay?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Time-decayed trust score (newer follows weigh more)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/decay/top</span><span class="desc">— Top pubkeys by decay-adjusted score with rank changes</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/authorized</span><span class="desc">— Kind 10040 authorized users (who trusts us)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/communities?pubkey=&lt;hex&gt;</span><span class="desc">— Trust community detection (label propagation)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/top</span><span class="desc">— Top 50 scored pubkeys</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
@@ -1961,6 +2074,26 @@ if(!data||!data.length){tbody.innerHTML='<tr><td colspan="4" style="color:#555">
 const top10=data.slice(0,10);
 tbody.innerHTML=top10.map((e,i)=>'<tr><td class="lb-rank">'+(i+1)+'</td><td class="lb-pubkey">'+e.pubkey.slice(0,12)+'...'+e.pubkey.slice(-8)+'</td><td class="lb-score">'+(e.norm_score||0)+'/100</td><td class="lb-followers">'+fmt(e.followers||0)+'</td></tr>').join("");
 }).catch(()=>{document.getElementById("lb-body").innerHTML='<tr><td colspan="4" style="color:#555">Failed to load</td></tr>'});
+
+// Load communities
+fetch("/communities").then(r=>r.json()).then(data=>{
+const el=document.getElementById("communities-list");
+if(!data||!data.top||!data.top.length){el.innerHTML='<div style="color:#555">No communities detected yet</div>';return}
+let html='<div style="color:#888;margin-bottom:.75rem">'+data.total_communities+' communities detected</div>';
+html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.75rem">';
+data.top.slice(0,8).forEach((c,i)=>{
+html+='<div style="background:#111;border:1px solid #222;border-radius:8px;padding:.75rem">';
+html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">';
+html+='<span style="color:#a78bfa;font-weight:600">Cluster #'+(i+1)+'</span>';
+html+='<span style="color:#10b981;font-size:.85rem">'+c.size+' members</span></div>';
+html+='<div style="font-size:.8rem;color:#888">Avg rank: '+c.avg_rank.toFixed(1)+' · Top: '+c.top_rank+'/100</div>';
+if(c.members&&c.members.length){html+='<div style="margin-top:.5rem;font-size:.75rem;color:#555">';
+c.members.slice(0,3).forEach(m=>{html+='<div style="font-family:monospace;padding:.1rem 0">'+m.slice(0,12)+'...'+m.slice(-6)+'</div>'});
+html+='</div>'}
+html+='</div>'});
+html+='</div>';
+el.innerHTML=html;
+}).catch(()=>{document.getElementById("communities-list").innerHTML='<div style="color:#555">Failed to load communities</div>'});
 </script>
 </body>
 </html>`
@@ -2021,6 +2154,15 @@ func main() {
 		}
 		consumeExternalAssertions(ctx, externalAssertions, ownPub)
 
+		// Consume NIP-85 kind 10040 authorizations
+		consumeAuthorizations(ctx, authStore)
+
+		// Detect trust communities via label propagation
+		log.Printf("Detecting trust communities...")
+		numCommunities := communities.DetectCommunities(graph, 10)
+		log.Printf("Community detection complete: %d non-trivial communities", communities.TotalCommunities())
+		_ = numCommunities
+
 		// Auto-publish NIP-85 events after initial crawl
 		autoPublish(ctx)
 
@@ -2038,10 +2180,12 @@ func main() {
 				events.CrawlEventEngagement(ctx, topPubkeys)
 				external.CrawlExternalIdentifiers(ctx, topPubkeys)
 				consumeExternalAssertions(ctx, externalAssertions, ownPub)
+				consumeAuthorizations(ctx, authStore)
+				communities.DetectCommunities(graph, 10)
 				stats := graph.Stats()
-				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external, %d ext_assertions",
+				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external, %d ext_assertions, %d auths, %d communities",
 					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count(),
-					externalAssertions.TotalAssertions())
+					externalAssertions.TotalAssertions(), authStore.TotalAuthorizations(), communities.TotalCommunities())
 
 				autoPublish(ctx)
 			}
@@ -2064,6 +2208,9 @@ func main() {
 			"external":             external.Count(),
 			"external_providers":   externalAssertions.ProviderCount(),
 			"external_assertions":  externalAssertions.TotalAssertions(),
+			"authorizations":       authStore.TotalAuthorizations(),
+			"authorized_users":     authStore.TotalUsers(),
+			"communities":          communities.TotalCommunities(),
 			"uptime":               time.Since(startTime).String(),
 		})
 	})
@@ -2094,6 +2241,8 @@ func main() {
 	http.HandleFunc("/compare", handleCompare)
 	http.HandleFunc("/decay", handleDecay)
 	http.HandleFunc("/decay/top", handleDecayTop)
+	http.HandleFunc("/authorized", handleAuthorized)
+	http.HandleFunc("/communities", handleCommunities)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -2129,6 +2278,10 @@ POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["h
 /relay?url=<wss://...> — Relay trust + operator WoT (via trustedrelays.xyz)
 /decay?pubkey=<hex> — Time-decayed trust score (newer follows weigh more, configurable half-life)
 /decay/top — Top pubkeys by decay-adjusted score with rank changes vs static
+/authorized — Kind 10040 authorized users (who declared trust in this provider)
+/authorized?pubkey=<hex> — Authorizations for a specific provider
+/communities — Top trust communities detected via label propagation
+/communities?pubkey=<hex> — Community membership and peers for a pubkey
 /providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
