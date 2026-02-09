@@ -798,6 +798,23 @@ const openAPISpec = `{
         }
       }
     },
+    "/trust-circle/compare": {
+      "get": {
+        "tags": ["Trust Circles"],
+        "operationId": "compareTrustCircles",
+        "summary": "Compare two pubkeys' trust circles",
+        "description": "Compares the trust circles (mutual follows) of two pubkeys. Returns overlapping members (in both circles), unique members (in only one), and a compatibility score (0-100) based on circle overlap ratio, shared follow ratio, and average WoT score of overlapping members. Useful for Nostr clients to show 'how compatible are these two users?' or 'who do we both trust?'",
+        "parameters": [
+          {"name": "pubkey1", "in": "query", "required": true, "schema": {"type": "string"}, "description": "First hex pubkey or npub"},
+          {"name": "pubkey2", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Second hex pubkey or npub"}
+        ],
+        "responses": {
+          "200": {"description": "Circle comparison with overlap, unique members, and compatibility score"},
+          "400": {"description": "Missing, invalid, or identical pubkeys"},
+          "402": {"description": "L402 payment required (5 sats)"}
+        }
+      }
+    },
     "/follow-quality": {
       "get": {
         "tags": ["Follow Quality"],

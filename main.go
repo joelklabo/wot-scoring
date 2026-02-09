@@ -2667,6 +2667,50 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<div class="endpoint-card" id="ep-trust-circle-compare">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/trust-circle/compare</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Compares the trust circles of two pubkeys. Returns overlapping members (trusted by both), unique members (trusted by only one), and a compatibility score (0-100) based on circle overlap, shared follows, and WoT quality. Perfect for "how compatible are these two users?" or "who do we both trust?"</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey1</span><span class="param-type">string</span><span class="param-desc">First hex pubkey or npub <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">pubkey2</span><span class="param-type">string</span><span class="param-desc">Second hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey1": "32e1827635...",
+  "pubkey2": "82341f882b...",
+  "trust_score_1": 78,
+  "trust_score_2": 89,
+  "circle_size_1": 187,
+  "circle_size_2": 234,
+  "compatibility": {
+    "score": 42,
+    "classification": "moderate",
+    "overlap_count": 67,
+    "overlap_ratio": 0.189,
+    "avg_overlap_wot": 45.3,
+    "shared_follows": 156,
+    "shared_ratio": 0.312
+  },
+  "overlap": [
+    {"pubkey": "abc123...", "trust_score": 72, "strength_with_1": 0.821, "strength_with_2": 0.756}
+  ],
+  "unique_to_1": [
+    {"pubkey": "def456...", "trust_score": 55}
+  ],
+  "unique_to_2": [
+    {"pubkey": "ghi789...", "trust_score": 61}
+  ],
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== FOLLOW QUALITY ===== -->
 <h2 id="follow-quality">Follow Quality</h2>
 <p class="section-intro">Analyze the quality and health of a pubkey's follow list. Help users curate better follow lists.</p>
@@ -3903,6 +3947,7 @@ func main() {
 	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/compare-providers", handleCompareProviders)
 	http.HandleFunc("/trust-circle", handleTrustCircle)
+	http.HandleFunc("/trust-circle/compare", handleTrustCircleCompare)
 	http.HandleFunc("/follow-quality", handleFollowQuality)
 	http.HandleFunc("/demo", handleDemo)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
