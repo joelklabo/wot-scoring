@@ -30,6 +30,7 @@ Live at https://wot.klabo.world — try any endpoint below.
 GET /                        — Service info and endpoint list
 GET /health                  — Health check (status, graph size, uptime)
 GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382) + composite from external providers
+GET /audit?pubkey=<hex>      — Score audit: full breakdown of why a pubkey has its score
 GET /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
 POST /batch                  — Score up to 100 pubkeys in one request (JSON: {"pubkeys":[...]})
 GET /similar?pubkey=<hex>    — Find similar pubkeys by follow-graph overlap
@@ -348,6 +349,58 @@ Response:
 ```
 
 Relations: `mutual` (both follow each other), `follows` (you follow them), `follower` (they follow you), `extended` (depth=2, friends-of-friends). Depth 1 or 2, max 200 results, sorted by WoT score.
+
+## Score Audit
+
+Explains exactly why a pubkey has its score, breaking down all contributing factors:
+
+```
+GET /audit?pubkey=<hex|npub>
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827...",
+  "found": true,
+  "final_score": 92,
+  "pagerank": {
+    "raw_score": 0.000245,
+    "normalized_score": 92,
+    "follower_count": 12847,
+    "following_count": 942,
+    "percentile": 0.9987,
+    "rank": 7,
+    "algorithm": "PageRank",
+    "damping": 0.85,
+    "iterations": 20,
+    "normalization": "log10(raw/avg + 1) * 25, capped at 100"
+  },
+  "engagement": {
+    "posts": 234,
+    "replies": 156,
+    "reactions_received": 892,
+    "reactions_sent": 445,
+    "zaps_received_sats": 15240,
+    "zaps_received_count": 42,
+    "zaps_sent_sats": 5000,
+    "zaps_sent_count": 18,
+    "first_event": "2022-12-03T10:30:00Z"
+  },
+  "top_followers": [
+    {"pubkey": "82341f...", "score": 95},
+    {"pubkey": "fa984bd...", "score": 78}
+  ],
+  "graph_context": {
+    "total_nodes": 51446,
+    "total_edges": 620467,
+    "last_rebuild": "2026-02-09T12:30:00Z"
+  }
+}
+```
+
+When external NIP-85 assertions exist, the response includes a `composite` object showing the 70/30 internal/external weighting and per-provider breakdown instead of `final_score`.
 
 ## Batch Scoring
 
