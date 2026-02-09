@@ -290,7 +290,7 @@ func L402Enabled() bool {
 
 // NewL402FromEnv creates an L402 middleware from environment variables.
 func NewL402FromEnv() *L402Middleware {
-	freeTier := 10 // Default: 10 free requests per IP per day
+	freeTier := 50 // Free requests per IP per day (increased for demo/presentation)
 	return NewL402Middleware(L402Config{
 		LNbitsURL:    os.Getenv("LNBITS_URL"),
 		LNbitsAPIKey: os.Getenv("LNBITS_KEY"),

@@ -285,6 +285,57 @@ func TestDemo_HasLinkPrediction(t *testing.T) {
 	}
 }
 
+func TestDemo_HasScoreAudit(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "auditCard") {
+		t.Error("expected score audit card")
+	}
+	if !strings.Contains(body, "auditContent") {
+		t.Error("expected audit content container")
+	}
+	if !strings.Contains(body, "renderAudit") {
+		t.Error("expected renderAudit function")
+	}
+	if !strings.Contains(body, "/audit?pubkey=") {
+		t.Error("expected audit endpoint call")
+	}
+	if !strings.Contains(body, "Why This Score") {
+		t.Error("expected 'Why This Score' title")
+	}
+	if !strings.Contains(body, "PageRank Breakdown") {
+		t.Error("expected PageRank breakdown display")
+	}
+}
+
+func TestDemo_HasRecommendedFollows(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "recommendCard") {
+		t.Error("expected recommendations card")
+	}
+	if !strings.Contains(body, "recommendContent") {
+		t.Error("expected recommend content container")
+	}
+	if !strings.Contains(body, "renderRecommend") {
+		t.Error("expected renderRecommend function")
+	}
+	if !strings.Contains(body, "/recommend?pubkey=") {
+		t.Error("expected recommend endpoint call")
+	}
+	if !strings.Contains(body, "Recommended Follows") {
+		t.Error("expected 'Recommended Follows' title")
+	}
+}
+
 func TestDemo_HasResponsiveLayout(t *testing.T) {
 	req := httptest.NewRequest("GET", "/demo", nil)
 	rr := httptest.NewRecorder()

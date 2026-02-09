@@ -354,6 +354,16 @@ const demoPageHTML = `<!DOCTYPE html>
     <div id="anomalyContent"></div>
   </div>
 
+  <div class="card" id="auditCard">
+    <h2>Score Audit — Why This Score?</h2>
+    <div id="auditContent"></div>
+  </div>
+
+  <div class="card" id="recommendCard">
+    <h2>Recommended Follows</h2>
+    <div id="recommendContent"></div>
+  </div>
+
   <div class="card full" id="compareCard">
     <h2>Trust Circle Compare</h2>
     <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.8rem;">
@@ -445,7 +455,7 @@ async function doSearch() {
     const base = window.location.origin;
     const pk = encodeURIComponent(raw);
 
-    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes, spamRes, anomalyRes] = await Promise.all([
+    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes, spamRes, anomalyRes, auditRes, recommendRes] = await Promise.all([
       fetch(base + '/score?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/sybil?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/reputation?pubkey=' + pk).then(r => r.json()),
@@ -457,7 +467,9 @@ async function doSearch() {
       }).then(r => r.json()),
       fetch(base + '/follow-quality?pubkey=' + pk + '&suggestions=5').then(r => r.json()),
       fetch(base + '/spam?pubkey=' + pk).then(r => r.json()),
-      fetch(base + '/anomalies?pubkey=' + pk).then(r => r.json())
+      fetch(base + '/anomalies?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/audit?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/recommend?pubkey=' + pk + '&limit=8').then(r => r.json())
     ]);
 
     if (scoreRes.error) throw new Error(scoreRes.error);
@@ -470,6 +482,8 @@ async function doSearch() {
     renderQuality(qualityRes);
     renderSpam(spamRes);
     renderAnomalies(anomalyRes);
+    renderAudit(auditRes);
+    renderRecommend(recommendRes);
 
     dashboard.classList.add('visible');
     status.textContent = '';
@@ -1020,6 +1034,90 @@ async function runPredict() {
   } finally {
     predBtn.disabled = false;
   }
+}
+
+function renderAudit(data) {
+  if (data.error || data.status === 'payment_required') {
+    $('#auditContent').innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">' + (data.error || data.message || 'Unavailable') + '</span>';
+    return;
+  }
+  const pr = data.pagerank || {};
+  const eng = data.engagement || {};
+  const comp = data.composite || {};
+  const finalScore = comp.final_score ?? data.final_score ?? pr.normalized_score ?? 0;
+
+  let html = '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem;">';
+  html += '<div class="spam-prob" style="color:' + scoreColor(finalScore) + '">' + finalScore + '</div>';
+  html += '<div><div style="font-size:0.85rem;font-weight:600;">Final Score</div>';
+  html += '<div style="font-size:0.75rem;color:var(--muted);">Rank #' + (pr.rank || '?') + ' · Top ' + ((pr.percentile || 0) * 100).toFixed(1) + '%</div></div>';
+  html += '</div>';
+
+  html += '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.4rem;">PageRank Breakdown</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem 1rem;font-size:0.8rem;">';
+  html += '<div>Raw Score: <span style="color:var(--accent)">' + (pr.raw_score ? pr.raw_score.toExponential(2) : '—') + '</span></div>';
+  html += '<div>Normalized: <span style="color:' + scoreColor(pr.normalized_score || 0) + '">' + (pr.normalized_score || 0) + '/100</span></div>';
+  html += '<div>Followers: <span style="color:var(--accent)">' + (pr.follower_count || 0).toLocaleString() + '</span></div>';
+  html += '<div>Following: <span>' + (pr.following_count || 0).toLocaleString() + '</span></div>';
+  html += '</div>';
+
+  if (comp.internal_weight) {
+    html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.6rem;margin-bottom:0.3rem;">Composite Scoring</div>';
+    html += '<div style="font-size:0.8rem;">Internal (' + (comp.internal_weight * 100) + '%): <span style="color:' + scoreColor(comp.internal_score || 0) + '">' + (comp.internal_score || 0) + '</span>';
+    html += ' · External (' + (comp.external_weight * 100) + '%): <span style="color:var(--accent)">' + ((comp.external_average || 0).toFixed(1)) + '</span></div>';
+  }
+
+  const tf = data.top_followers || [];
+  if (tf.length > 0) {
+    html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.6rem;margin-bottom:0.3rem;">Top Followers by WoT</div>';
+    html += '<div class="member-list" style="max-height:100px;">';
+    tf.forEach(f => {
+      const pk = f.pubkey.slice(0, 8) + '...' + f.pubkey.slice(-6);
+      html += '<div class="member"><span class="pk">' + pk + '</span><span class="score" style="color:' + scoreColor(f.score) + '">' + f.score + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  const posts = eng.posts || 0;
+  const replies = eng.replies || 0;
+  const zaps = eng.zaps_received_count || 0;
+  const zapSats = eng.zaps_received_sats || 0;
+  if (posts > 0 || replies > 0 || zaps > 0) {
+    html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">';
+    html += 'Activity: ' + posts + ' posts · ' + replies + ' replies';
+    if (zaps > 0) html += ' · ' + zaps + ' zaps (' + zapSats.toLocaleString() + ' sats)';
+    html += '</div>';
+  }
+
+  $('#auditContent').innerHTML = html;
+}
+
+function renderRecommend(data) {
+  if (data.error || data.status === 'payment_required') {
+    $('#recommendContent').innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">' + (data.error || data.message || 'Unavailable') + '</span>';
+    return;
+  }
+  const recs = data.recommendations || [];
+  if (recs.length === 0) {
+    $('#recommendContent').innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">No recommendations found — this pubkey may have too few follows.</span>';
+    return;
+  }
+
+  let html = '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem;">' + data.total_found + ' candidates from ' + (data.follows_count || 0) + ' follows — top ' + recs.length + ' shown</div>';
+  html += '<div class="member-list" style="max-height:200px;">';
+  recs.forEach(r => {
+    const pk = r.pubkey.slice(0, 8) + '...' + r.pubkey.slice(-6);
+    const mutualPct = ((r.mutual_ratio || 0) * 100).toFixed(0);
+    html += '<div class="member" style="display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span class="pk">' + pk + '</span>';
+    html += '<span style="font-size:0.75rem;">';
+    html += '<span style="color:var(--accent)">' + (r.mutual_follows || 0) + ' mutual</span>';
+    html += ' <span style="color:var(--muted)">(' + mutualPct + '%)</span>';
+    html += ' · <span style="color:' + scoreColor(r.wot_score) + '">' + r.wot_score + '</span>';
+    html += '</span></div>';
+  });
+  html += '</div>';
+
+  $('#recommendContent').innerHTML = html;
 }
 </script>
 </body>
