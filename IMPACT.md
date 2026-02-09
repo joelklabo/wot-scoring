@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 32 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 33 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 32 endpoints serve live data. 233 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 33 endpoints serve live data. 252 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -50,12 +50,14 @@ Beyond standard PageRank scoring, we implemented:
 - **Spam detection** (`/spam`) — multi-signal spam classification combining 6 weighted indicators: WoT score (30%), follower/following ratio (15%), account age (15%), engagement received (15%), reports received (15%), and activity pattern (10%). Returns a 0.0-1.0 spam probability with classification ("likely_human", "suspicious", "likely_spam") and transparent signal breakdown explaining each factor. Enables clients to filter spam without running their own heuristics.
 - **Batch spam filtering** (`POST /spam/batch`) — check up to 100 pubkeys for spam in one request, with summary counts (likely_human, suspicious, likely_spam, errors). Enables clients to filter entire contact lists or relay event feeds for spam without individual queries.
 - **Trust graph visualization** (`/weboftrust`) — returns a D3.js-compatible force-directed graph (nodes + links) centered on a pubkey. Nodes are colored by relationship type (follow, follower, mutual) and sized by WoT score. Clients can render interactive trust network maps. The landing page includes a built-in SVG visualization with zoom and limit controls.
+- **Mute list analysis** (`/blocked`) — NIP-51 kind 10000 mute list integration providing two modes: (1) who a pubkey has muted, and (2) who has muted a target pubkey. The reverse lookup produces a "community moderation signal" — when multiple high-WoT users have independently blocked the same pubkey, it's a strong negative trust indicator. Signals range from "no_data" through "weak_negative", "moderate_negative", to "strong_negative". Each entry includes WoT scores for context. This bridges NIP-51 (mute lists) with NIP-85 (trust assertions), adding negative trust signals that complement the positive signals from follows and engagement.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
 
 - **Publishes** all five NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net) and NIP-85 dedicated relays (nip85.nostr1.com, nip85.brainstorm.world)
 - **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
+- **Consumes** kind 10000 mute lists (NIP-51) from relays, building a reverse index for community moderation analysis
 - **NIP-89 handler** published on startup for automatic client discovery
 - **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)
 - **NIP-05 identity resolution** — `/nip05` endpoint resolves NIP-05 identifiers to pubkeys and returns WoT trust profiles, bridging identity verification with trust scoring
@@ -83,9 +85,9 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 233 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, topics, activity hours, reports, API handlers, API documentation, OpenAPI spec validation, and Swagger UI
+- 252 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, mute list analysis, graph visualization, topics, activity hours, reports, API handlers, API documentation, OpenAPI spec validation, and Swagger UI
 - Interactive API documentation at `/docs` with endpoint cards, request/response examples, and live "Try it" buttons
-- [Swagger UI API explorer](https://wot.klabo.world/swagger) at `/swagger` — interactive testing of all 32 endpoints directly in the browser
+- [Swagger UI API explorer](https://wot.klabo.world/swagger) at `/swagger` — interactive testing of all 33 endpoints directly in the browser
 - Machine-readable [OpenAPI 3.0.3 spec](https://wot.klabo.world/openapi.json) at `/openapi.json` — enables automated client generation, Swagger UI integration, Postman import, and MCP agent discovery
 - This impact statement and technical architecture documented in the repository
 
@@ -108,6 +110,7 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 | `/compare` | 2 sats | 10/day per IP |
 | `/nip05/reverse` | 2 sats | 10/day per IP |
 | `/spam` | 2 sats | 10/day per IP |
+| `/blocked` | 2 sats | 10/day per IP |
 | `/audit` | 5 sats | 10/day per IP |
 | `/nip05/batch` | 5 sats | 10/day per IP |
 | `/spam/batch` | 10 sats | 10/day per IP |

@@ -512,6 +512,23 @@ const openAPISpec = `{
         }
       }
     },
+    "/blocked": {
+      "get": {
+        "tags": ["Trust Analysis"],
+        "operationId": "getBlocked",
+        "summary": "Mute list analysis (NIP-51 kind 10000)",
+        "description": "Two modes: (1) pubkey mode returns who a pubkey has muted, (2) target mode returns who has muted a target pubkey with community moderation signal strength. Integrates NIP-51 mute lists with WoT trust scores.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": false, "schema": {"type": "string"}, "description": "Hex pubkey or npub — returns their mute list"},
+          {"name": "target", "in": "query", "required": false, "schema": {"type": "string"}, "description": "Hex pubkey or npub — returns who has muted this target"}
+        ],
+        "responses": {
+          "200": {"description": "Mute analysis with WoT scores and community signal"},
+          "400": {"description": "Missing or invalid pubkey/target"},
+          "402": {"description": "L402 payment required (2 sats)"}
+        }
+      }
+    },
     "/docs": {
       "get": {
         "tags": ["Infrastructure"],

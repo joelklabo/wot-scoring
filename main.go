@@ -218,6 +218,7 @@ var events = NewEventStore()
 var external = NewExternalStore()
 var externalAssertions = NewAssertionStore()
 var authStore = NewAuthStore()
+var muteStore = NewMuteStore()
 var communities = NewCommunityDetector()
 var startTime = time.Now()
 
@@ -3148,6 +3149,9 @@ func main() {
 		// Consume NIP-85 kind 10040 authorizations
 		consumeAuthorizations(ctx, authStore)
 
+		// Consume NIP-51 kind 10000 mute lists
+		consumeMuteLists(ctx, muteStore)
+
 		// Detect trust communities via label propagation
 		log.Printf("Detecting trust communities...")
 		numCommunities := communities.DetectCommunities(graph, 10)
@@ -3172,11 +3176,12 @@ func main() {
 				external.CrawlExternalIdentifiers(ctx, topPubkeys)
 				consumeExternalAssertions(ctx, externalAssertions, ownPub)
 				consumeAuthorizations(ctx, authStore)
+				consumeMuteLists(ctx, muteStore)
 				communities.DetectCommunities(graph, 10)
 				stats := graph.Stats()
-				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external, %d ext_assertions, %d auths, %d communities",
+				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external, %d ext_assertions, %d auths, %d mute_lists, %d communities",
 					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count(),
-					externalAssertions.TotalAssertions(), authStore.TotalAuthorizations(), communities.TotalCommunities())
+					externalAssertions.TotalAssertions(), authStore.TotalAuthorizations(), muteStore.TotalMuters(), communities.TotalCommunities())
 
 				autoPublish(ctx)
 			}
@@ -3202,6 +3207,8 @@ func main() {
 			"authorizations":       authStore.TotalAuthorizations(),
 			"authorized_users":     authStore.TotalUsers(),
 			"communities":          communities.TotalCommunities(),
+			"mute_lists":           muteStore.TotalMuters(),
+			"muted_pubkeys":        muteStore.TotalMuted(),
 			"uptime":               time.Since(startTime).String(),
 		})
 	})
@@ -3241,6 +3248,7 @@ func main() {
 	http.HandleFunc("/spam", handleSpam)
 	http.HandleFunc("/spam/batch", handleSpamBatch)
 	http.HandleFunc("/weboftrust", handleWebOfTrust)
+	http.HandleFunc("/blocked", handleBlocked)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
-NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, publishes kind 30382/30383/30384/30385 events to relays, **consumes kind 10040 provider authorizations**, enriches relay data from trustedrelays.xyz with social reputation, **detects trust communities** via label propagation, and **consumes assertions from external NIP-85 providers** for composite trust scoring. Auto re-crawls every 6 hours.
+NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, publishes kind 30382/30383/30384/30385 events to relays, **consumes kind 10040 provider authorizations**, **consumes kind 10000 mute lists (NIP-51) for community moderation signals**, enriches relay data from trustedrelays.xyz with social reputation, **detects trust communities** via label propagation, and **consumes assertions from external NIP-85 providers** for composite trust scoring. Auto re-crawls every 6 hours.
 
 ## What it does
 
@@ -21,8 +21,9 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 11. **Consumes kind 30382 assertions from external NIP-85 providers**
 12. Computes composite trust scores blending internal PageRank with external assertions
 13. **Consumes kind 10040 provider authorization events** — tracks which users trust which providers
-14. **Detects trust communities** via label propagation over the follow graph
-15. Re-crawls automatically every 6 hours
+14. **Consumes kind 10000 mute lists (NIP-51)** — builds reverse index for community moderation signals
+15. **Detects trust communities** via label propagation over the follow graph
+16. Re-crawls automatically every 6 hours
 
 ## API
 
@@ -55,6 +56,8 @@ GET /timeline?pubkey=<hex|npub> — Trust timeline: monthly follower growth and 
 GET /spam?pubkey=<hex|npub>  — Spam detection: multi-signal analysis with classification and signal breakdown
 POST /spam/batch             — Bulk spam check up to 100 pubkeys with summary counts (JSON: {"pubkeys":[...]})
 GET /weboftrust?pubkey=<hex|npub> — D3.js-compatible trust graph: nodes + links for force-directed visualization
+GET /blocked?pubkey=<hex|npub> — Who has this pubkey muted (their NIP-51 mute list)
+GET /blocked?target=<hex|npub> — Who has muted this target (reverse lookup + community signal)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -672,7 +675,7 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | Endpoint | Price |
 |----------|-------|
 | `/score`, `/decay`, `/nip05` | 1 sat |
-| `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam` | 2 sats |
+| `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam`, `/blocked` | 2 sats |
 | `/weboftrust` | 3 sats |
 | `/audit`, `/nip05/batch` | 5 sats |
 | `/batch`, `/spam/batch` | 10 sats |
