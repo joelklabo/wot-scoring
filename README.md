@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
-NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, and publishes kind 30382/30383/30384/30385 events to relays. Enriches relay infrastructure data from trustedrelays.xyz with social reputation scores. Auto re-crawls every 6 hours.
+NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, publishes kind 30382/30383/30384/30385 events to relays, enriches relay data from trustedrelays.xyz with social reputation, and **consumes assertions from external NIP-85 providers** for composite trust scoring. Auto re-crawls every 6 hours.
 
 ## What it does
 
@@ -18,7 +18,9 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 8. Serves scores and metadata via HTTP API
 9. Combines relay infrastructure trust (trustedrelays.xyz) with operator social reputation (PageRank)
 10. Publishes all four NIP-85 assertion kinds to Nostr relays
-11. Re-crawls automatically every 6 hours
+11. **Consumes kind 30382 assertions from external NIP-85 providers**
+12. Computes composite trust scores blending internal PageRank with external assertions
+13. Re-crawls automatically every 6 hours
 
 ## API
 
@@ -27,12 +29,13 @@ Live at https://wot.klabo.world — try any endpoint below.
 ```
 GET /                        — Service info and endpoint list
 GET /health                  — Health check (status, graph size, uptime)
-GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382)
+GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382) + composite from external providers
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
 GET /external                — Top 50 external identifiers (hashtags, URLs)
 GET /relay?url=<wss://...>   — Relay trust + operator WoT (via trustedrelays.xyz)
+GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
 GET /stats                   — Service stats and graph info
@@ -180,6 +183,25 @@ Example response for `GET /relay?url=wss://relay.damus.io`:
 ```
 
 Responses are cached for 30 minutes to respect trustedrelays.xyz rate limits (60 req/min). Unknown relays gracefully return a 0 score.
+
+## Interoperability — External Assertion Consumption
+
+The service **consumes NIP-85 kind 30382 events from other providers** on the relay network and blends them into a composite trust score.
+
+- Subscribes to kind 30382 events from the last 7 days on all configured relays
+- Filters out self-published assertions (only external providers are included)
+- Stores per-provider, per-subject assertions with deduplication (newest wins)
+- When querying `/score`, if external assertions exist for a pubkey, the response includes a `composite_score` and `external_assertions` breakdown
+
+**Composite scoring formula:**
+
+```
+composite = (internal_score × 0.70) + (external_avg × 0.30)
+```
+
+This means clients can ask our service for a trust score that blends multiple independent WoT engines — true NIP-85 interoperability.
+
+The `/providers` endpoint lists all discovered external NIP-85 assertion providers and their assertion counts.
 
 ## NIP-89 Handler Announcement
 

@@ -150,6 +150,7 @@ var graph = NewGraph()
 var meta = NewMetaStore()
 var events = NewEventStore()
 var external = NewExternalStore()
+var externalAssertions = NewAssertionStore()
 var startTime = time.Now()
 
 func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
@@ -247,10 +248,14 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 	stats := graph.Stats()
 	m := meta.Get(pubkey)
 
+	internalScore := normalizeScore(score, stats.Nodes)
+	extAssertions := externalAssertions.GetForSubject(pubkey)
+	compositeScore, extSources := CompositeScore(internalScore, extAssertions)
+
 	resp := map[string]interface{}{
 		"pubkey":     pubkey,
 		"raw_score":  score,
-		"score":      normalizeScore(score, stats.Nodes),
+		"score":      internalScore,
 		"found":      ok,
 		"graph_size": stats.Nodes,
 		"followers":     m.Followers,
@@ -259,6 +264,11 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 		"reactions":     m.ReactionsRecd,
 		"zap_amount":    m.ZapAmtRecd,
 		"zap_count":     m.ZapCntRecd,
+	}
+
+	if len(extSources) > 0 {
+		resp["composite_score"] = compositeScore
+		resp["external_assertions"] = extSources
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -973,6 +983,15 @@ func main() {
 		external.CrawlExternalIdentifiers(ctx, topPubkeys)
 		log.Printf("External identifier crawl complete: %d identifiers", external.Count())
 
+		// Consume external NIP-85 assertions from other providers
+		ownPub := ""
+		if nsec, err := getNsec(); err == nil {
+			if _, pub, err := decodeKey(nsec); err == nil {
+				ownPub = pub
+			}
+		}
+		consumeExternalAssertions(ctx, externalAssertions, ownPub)
+
 		// Auto-publish NIP-85 events after initial crawl
 		autoPublish(ctx)
 
@@ -989,9 +1008,11 @@ func main() {
 				meta.CrawlMetadata(ctx, topPubkeys)
 				events.CrawlEventEngagement(ctx, topPubkeys)
 				external.CrawlExternalIdentifiers(ctx, topPubkeys)
+				consumeExternalAssertions(ctx, externalAssertions, ownPub)
 				stats := graph.Stats()
-				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external",
-					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count())
+				log.Printf("Re-crawl complete: %d nodes, %d edges, %d events, %d addressable, %d external, %d ext_assertions",
+					stats.Nodes, stats.Edges, events.EventCount(), events.AddressableCount(), external.Count(),
+					externalAssertions.TotalAssertions())
 
 				autoPublish(ctx)
 			}
@@ -1006,13 +1027,24 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":      status,
-			"graph_nodes": stats.Nodes,
-			"graph_edges": stats.Edges,
-			"events":      events.EventCount(),
-			"addressable": events.AddressableCount(),
-			"external":    external.Count(),
-			"uptime":      time.Since(startTime).String(),
+			"status":               status,
+			"graph_nodes":          stats.Nodes,
+			"graph_edges":          stats.Edges,
+			"events":               events.EventCount(),
+			"addressable":          events.AddressableCount(),
+			"external":             external.Count(),
+			"external_providers":   externalAssertions.ProviderCount(),
+			"external_assertions":  externalAssertions.TotalAssertions(),
+			"uptime":               time.Since(startTime).String(),
+		})
+	})
+	http.HandleFunc("/providers", func(w http.ResponseWriter, r *http.Request) {
+		providers := externalAssertions.Providers()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"providers":        providers,
+			"provider_count":   externalAssertions.ProviderCount(),
+			"total_assertions": externalAssertions.TotalAssertions(),
 		})
 	})
 	http.HandleFunc("/score", handleScore)
@@ -1044,12 +1076,13 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{
 			"name":        "WoT Scoring Service",
 			"description": "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with full metadata collection.",
-			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382)
+			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382), with composite scoring from external providers
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)
 /external — Top 50 external identifiers (hashtags, URLs)
 /relay?url=<wss://...> — Relay trust + operator WoT (via trustedrelays.xyz)
+/providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
 /stats — Service stats and graph info
