@@ -1658,17 +1658,51 @@ h1{font-size:2rem;color:#fff;margin-bottom:.25rem}
 .stat{background:#111;border:1px solid #222;border-radius:8px;padding:1rem;text-align:center}
 .stat-value{font-size:1.8rem;font-weight:700;color:#7c3aed}
 .stat-label{font-size:.85rem;color:#888;margin-top:.25rem}
-.search{margin:2rem 0}
-.search input{width:100%%;padding:.75rem 1rem;background:#111;border:1px solid #333;border-radius:8px;color:#fff;font-size:1rem}
-.search input::placeholder{color:#555}
-.search input:focus{outline:none;border-color:#7c3aed}
-#result{margin-top:1rem;min-height:2rem}
+.tabs{display:flex;gap:0;margin:2rem 0 0 0;border-bottom:2px solid #222}
+.tab{padding:.6rem 1.2rem;cursor:pointer;color:#888;font-size:.95rem;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab:hover{color:#ccc}
+.tab.active{color:#7c3aed;border-bottom-color:#7c3aed}
+.tab-content{display:none;margin:1.5rem 0 2rem 0}
+.tab-content.active{display:block}
+.search input,.compare-input,.path-input{width:100%%;padding:.75rem 1rem;background:#111;border:1px solid #333;border-radius:8px;color:#fff;font-size:1rem}
+.search input::placeholder,.compare-input::placeholder,.path-input::placeholder{color:#555}
+.search input:focus,.compare-input:focus,.path-input:focus{outline:none;border-color:#7c3aed}
+#result,#compare-result,#path-result{margin-top:1rem;min-height:2rem}
 .score-card{background:#111;border:1px solid #222;border-radius:8px;padding:1.5rem;margin-top:1rem}
 .score-big{font-size:3rem;font-weight:700;color:#7c3aed}
 .score-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-top:1rem}
 .score-detail{text-align:center}
 .score-detail-value{font-size:1.2rem;font-weight:600;color:#fff}
 .score-detail-label{font-size:.75rem;color:#666}
+.compare-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:start}
+.compare-side{background:#111;border:1px solid #222;border-radius:8px;padding:1.25rem}
+.compare-vs{display:flex;align-items:center;justify-content:center;color:#555;font-size:1.5rem;font-weight:700}
+.compare-name{font-family:monospace;font-size:.8rem;color:#888;word-break:break-all;margin-bottom:.75rem}
+.compare-score-big{font-size:2.5rem;font-weight:700;color:#7c3aed;text-align:center}
+.compare-bar{height:6px;border-radius:3px;background:#1a1a2e;margin:.75rem 0;overflow:hidden}
+.compare-bar-fill{height:100%%;border-radius:3px;transition:width .5s ease}
+.compare-meta{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem}
+.compare-meta-item{text-align:center}
+.compare-meta-val{font-size:1rem;font-weight:600;color:#fff}
+.compare-meta-lbl{font-size:.7rem;color:#666}
+.relationship{background:#111;border:1px solid #222;border-radius:8px;padding:1.25rem;margin-top:1rem}
+.relationship h3{font-size:1rem;color:#fff;margin-bottom:.75rem}
+.rel-badges{display:flex;flex-wrap:wrap;gap:.5rem}
+.rel-badge{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:6px;font-size:.85rem;font-weight:500}
+.rel-badge.positive{background:#052e16;color:#4ade80;border:1px solid #166534}
+.rel-badge.negative{background:#1c1917;color:#a8a29e;border:1px solid #292524}
+.rel-badge.neutral{background:#1a1a2e;color:#a78bfa;border:1px solid #333}
+.path-inputs{display:grid;grid-template-columns:1fr auto 1fr;gap:.75rem;align-items:center}
+.path-arrow{color:#555;font-size:1.5rem;text-align:center}
+.path-btn{padding:.75rem 1.5rem;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;margin-top:.75rem;transition:background .2s}
+.path-btn:hover{background:#6d28d9}
+.path-btn:disabled{background:#333;color:#666;cursor:not-allowed}
+.path-chain{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin-top:1rem;padding:1rem;background:#111;border:1px solid #222;border-radius:8px}
+.path-node{background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:.5rem .75rem;text-align:center;min-width:100px}
+.path-node-pk{font-family:monospace;font-size:.7rem;color:#aaa}
+.path-node-score{font-size:1.1rem;font-weight:700;color:#7c3aed}
+.path-hop{color:#555;font-size:1.2rem;padding:0 .25rem}
+.path-summary{margin-top:.75rem;color:#888;font-size:.9rem}
 .leaderboard{margin:2rem 0}
 .leaderboard h2{font-size:1.3rem;color:#fff;margin-bottom:1rem}
 .lb-table{width:100%%;border-collapse:collapse}
@@ -1695,6 +1729,7 @@ footer a{color:#7c3aed;text-decoration:none}
 footer a:hover{text-decoration:underline}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .3s ease-out}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr;}.compare-vs{padding:.5rem 0}.path-inputs{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1703,6 +1738,7 @@ footer a:hover{text-decoration:underline}
 <p class="subtitle">NIP-85 Trusted Assertions for the Nostr Web of Trust</p>
 <span class="badge">NIP-85</span>
 <span class="badge">PageRank</span>
+<span class="badge">Trust Decay</span>
 <span class="badge">Go</span>
 
 <div class="stats">
@@ -1714,9 +1750,38 @@ footer a:hover{text-decoration:underline}
 <div class="stat"><div class="stat-value">%s</div><div class="stat-label">Uptime</div></div>
 </div>
 
+<div class="tabs">
+<div class="tab active" data-tab="lookup">Score Lookup</div>
+<div class="tab" data-tab="compare">Compare</div>
+<div class="tab" data-tab="path">Trust Path</div>
+</div>
+
+<div class="tab-content active" id="tab-lookup">
 <div class="search">
 <input type="text" id="pubkey-input" placeholder="Enter npub or hex pubkey to look up trust score..." autofocus>
 <div id="result"></div>
+</div>
+</div>
+
+<div class="tab-content" id="tab-compare">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Compare two Nostr identities side-by-side to see their trust relationship</p>
+<div class="compare-grid">
+<div><input type="text" class="compare-input" id="compare-a" placeholder="First pubkey or npub..."></div>
+<div class="compare-vs">vs</div>
+<div><input type="text" class="compare-input" id="compare-b" placeholder="Second pubkey or npub..."></div>
+</div>
+<div id="compare-result"></div>
+</div>
+
+<div class="tab-content" id="tab-path">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">Find the shortest trust path between two Nostr identities through the follow graph</p>
+<div class="path-inputs">
+<input type="text" class="path-input" id="path-from" placeholder="From pubkey or npub...">
+<div class="path-arrow">&rarr;</div>
+<input type="text" class="path-input" id="path-to" placeholder="To pubkey or npub...">
+</div>
+<button class="path-btn" id="path-btn" onclick="findPath()">Find Trust Path</button>
+<div id="path-result"></div>
 </div>
 
 <div class="leaderboard">
@@ -1765,12 +1830,25 @@ footer a:hover{text-decoration:underline}
 </footer>
 </div>
 <script>
+function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+"M";if(n>=1e3)return(n/1e3).toFixed(1)+"K";return n.toString()}
+function pk(s){return s.slice(0,8)+"..."+s.slice(-6)}
+function err(el,msg){el.innerHTML='<div class="score-card fade-in" style="color:#f87171">'+msg+'</div>'}
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(t=>{
+t.addEventListener("click",()=>{
+document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+document.querySelectorAll(".tab-content").forEach(x=>x.classList.remove("active"));
+t.classList.add("active");
+document.getElementById("tab-"+t.dataset.tab).classList.add("active");
+})});
+
+// Score lookup
 const input=document.getElementById("pubkey-input"),result=document.getElementById("result");
 let timer;
-function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+"M";if(n>=1e3)return(n/1e3).toFixed(1)+"K";return n.toString()}
 input.addEventListener("input",()=>{clearTimeout(timer);const v=input.value.trim();if(!v){result.innerHTML="";return}
 timer=setTimeout(()=>{fetch("/score?pubkey="+encodeURIComponent(v)).then(r=>r.json()).then(d=>{
-if(d.error){result.innerHTML='<div class="score-card fade-in" style="color:#f87171">'+d.error+'</div>';return}
+if(d.error){err(result,d.error);return}
 let html='<div class="score-card fade-in"><div class="score-big">'+d.score+'/100</div>';
 html+='<div style="color:#888;margin-top:.25rem;font-family:monospace;font-size:.85rem">'+d.pubkey+'</div>';
 html+='<div class="score-details">';
@@ -1782,7 +1860,99 @@ html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.zap_cou
 html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reply_count||0)+'</div><div class="score-detail-label">Replies</div></div>';
 html+='</div></div>';
 result.innerHTML=html;
-}).catch(()=>{result.innerHTML='<div class="score-card fade-in" style="color:#f87171">Error fetching score</div>'})},400)});
+}).catch(()=>{err(result,"Error fetching score")})},400)});
+
+// Compare tool
+let cmpTimer;
+function doCompare(){
+clearTimeout(cmpTimer);
+const a=document.getElementById("compare-a").value.trim();
+const b=document.getElementById("compare-b").value.trim();
+const out=document.getElementById("compare-result");
+if(!a||!b){out.innerHTML="";return}
+cmpTimer=setTimeout(()=>{
+out.innerHTML='<div style="color:#555;margin-top:1rem">Loading...</div>';
+Promise.all([
+fetch("/compare?a="+encodeURIComponent(a)+"&b="+encodeURIComponent(b)).then(r=>r.json()),
+fetch("/score?pubkey="+encodeURIComponent(a)).then(r=>r.json()),
+fetch("/score?pubkey="+encodeURIComponent(b)).then(r=>r.json())
+]).then(([cmp,sa,sb])=>{
+if(cmp.error){err(out,cmp.error);return}
+const sA=sa.score||0,sB=sb.score||0;
+const maxS=Math.max(sA,sB,1);
+let html='<div class="fade-in">';
+html+='<div class="compare-grid">';
+// Side A
+html+='<div class="compare-side"><div class="compare-name">'+pk(cmp.a.pubkey)+'</div>';
+html+='<div class="compare-score-big">'+sA+'</div>';
+html+='<div class="compare-bar"><div class="compare-bar-fill" style="width:'+(sA/maxS*100)+'%%;background:#7c3aed"></div></div>';
+html+='<div class="compare-meta">';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sa.followers||0)+'</div><div class="compare-meta-lbl">Followers</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sa.post_count||0)+'</div><div class="compare-meta-lbl">Posts</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sa.zap_amount||0)+'</div><div class="compare-meta-lbl">Sats Recd</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sa.reactions||0)+'</div><div class="compare-meta-lbl">Reactions</div></div>';
+html+='</div></div>';
+// VS
+html+='<div class="compare-vs">vs</div>';
+// Side B
+html+='<div class="compare-side"><div class="compare-name">'+pk(cmp.b.pubkey)+'</div>';
+html+='<div class="compare-score-big">'+sB+'</div>';
+html+='<div class="compare-bar"><div class="compare-bar-fill" style="width:'+(sB/maxS*100)+'%%;background:#a78bfa"></div></div>';
+html+='<div class="compare-meta">';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sb.followers||0)+'</div><div class="compare-meta-lbl">Followers</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sb.post_count||0)+'</div><div class="compare-meta-lbl">Posts</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sb.zap_amount||0)+'</div><div class="compare-meta-lbl">Sats Recd</div></div>';
+html+='<div class="compare-meta-item"><div class="compare-meta-val">'+fmt(sb.reactions||0)+'</div><div class="compare-meta-lbl">Reactions</div></div>';
+html+='</div></div>';
+html+='</div>';
+// Relationship
+html+='<div class="relationship"><h3>Trust Relationship</h3><div class="rel-badges">';
+if(cmp.mutual_follow){html+='<span class="rel-badge positive">Mutual Follow</span>';}
+else{
+if(cmp.a_follows_b){html+='<span class="rel-badge positive">A follows B</span>';}else{html+='<span class="rel-badge negative">A does not follow B</span>';}
+if(cmp.b_follows_a){html+='<span class="rel-badge positive">B follows A</span>';}else{html+='<span class="rel-badge negative">B does not follow A</span>';}
+}
+html+='<span class="rel-badge neutral">'+fmt(cmp.shared_follows||0)+' shared follows</span>';
+html+='<span class="rel-badge neutral">'+fmt(cmp.a_trusted_followers_of_b||0)+' of A\'s follows trust B</span>';
+html+='</div></div>';
+html+='</div>';
+out.innerHTML=html;
+}).catch(()=>{err(out,"Error comparing pubkeys")});
+},500);
+}
+document.getElementById("compare-a").addEventListener("input",doCompare);
+document.getElementById("compare-b").addEventListener("input",doCompare);
+
+// Trust path finder
+function findPath(){
+const from=document.getElementById("path-from").value.trim();
+const to=document.getElementById("path-to").value.trim();
+const out=document.getElementById("path-result");
+const btn=document.getElementById("path-btn");
+if(!from||!to){err(out,"Enter both pubkeys");return}
+btn.disabled=true;btn.textContent="Searching...";
+out.innerHTML='<div style="color:#555;margin-top:1rem">Searching the graph...</div>';
+fetch("/graph?from="+encodeURIComponent(from)+"&to="+encodeURIComponent(to))
+.then(r=>r.json()).then(d=>{
+btn.disabled=false;btn.textContent="Find Trust Path";
+if(d.error){err(out,d.error);return}
+if(!d.found){
+out.innerHTML='<div class="score-card fade-in"><div style="color:#f59e0b;font-size:1.1rem;font-weight:600">No path found</div><div style="color:#888;margin-top:.5rem">These pubkeys are not connected within 6 hops in the follow graph.</div></div>';
+return;
+}
+let html='<div class="fade-in"><div class="path-chain">';
+d.path.forEach((node,i)=>{
+if(i>0)html+='<div class="path-hop">&rarr;</div>';
+html+='<div class="path-node"><div class="path-node-score">'+node.wot_score+'</div><div class="path-node-pk">'+pk(node.pubkey)+'</div></div>';
+});
+html+='</div>';
+html+='<div class="path-summary">'+d.hops+' hop'+(d.hops!==1?'s':'')+' &middot; '+d.path.length+' nodes &middot; searched '+fmt(d.graph_size)+' node graph</div>';
+html+='</div>';
+out.innerHTML=html;
+}).catch(()=>{btn.disabled=false;btn.textContent="Find Trust Path";err(out,"Error finding path")});
+}
+document.getElementById("path-from").addEventListener("keydown",e=>{if(e.key==="Enter")findPath()});
+document.getElementById("path-to").addEventListener("keydown",e=>{if(e.key==="Enter")findPath()});
 
 // Load leaderboard
 fetch("/top").then(r=>r.json()).then(data=>{
