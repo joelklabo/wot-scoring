@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/joelklabo/wot-scoring/actions/workflows/ci.yml)
 
-NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, and publishes kind 30382/30383/30384/30385 events to relays. Auto re-crawls every 6 hours.
+NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes PageRank trust scores, collects per-pubkey, per-event, and per-identifier engagement metadata, and publishes kind 30382/30383/30384/30385 events to relays. Enriches relay infrastructure data from trustedrelays.xyz with social reputation scores. Auto re-crawls every 6 hours.
 
 ## What it does
 
@@ -16,8 +16,9 @@ NIP-85 Trusted Assertions provider. Crawls the Nostr follow graph, computes Page
 6. Crawls addressable events (kind 30023 long-form, kind 30311 live activities) for kind 30384
 7. Crawls external identifiers — hashtags (t-tags) and URLs (r-tags) — for kind 30385
 8. Serves scores and metadata via HTTP API
-9. Publishes all four NIP-85 assertion kinds to Nostr relays
-9. Re-crawls automatically every 6 hours
+9. Combines relay infrastructure trust (trustedrelays.xyz) with operator social reputation (PageRank)
+10. Publishes all four NIP-85 assertion kinds to Nostr relays
+11. Re-crawls automatically every 6 hours
 
 ## API
 
@@ -31,6 +32,7 @@ GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactio
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
 GET /external                — Top 50 external identifiers (hashtags, URLs)
+GET /relay?url=<wss://...>   — Relay trust + operator WoT (via trustedrelays.xyz)
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
 GET /stats                   — Service stats and graph info
@@ -140,6 +142,44 @@ Each kind 30385 event scores an external identifier (NIP-73 format — hashtags,
 | `comments` | Aggregate reply count |
 | `zap_count` | Number of zaps on mentioning events |
 | `zap_amount` | Sats zapped on mentioning events |
+
+## Relay Trust Assessment
+
+The `/relay` endpoint combines infrastructure data from [trustedrelays.xyz](https://trustedrelays.xyz) with operator social reputation from our PageRank graph:
+
+```
+combined_score = infrastructure_trust * 0.70 + operator_wot_score * 0.30
+```
+
+Example response for `GET /relay?url=wss://relay.damus.io`:
+
+```json
+{
+  "url": "wss://relay.damus.io",
+  "name": "damus.io",
+  "operator_pubkey": "32e1827...",
+  "relay_trust": {
+    "overall": 90,
+    "reliability": 84,
+    "quality": 94,
+    "accessibility": 94,
+    "operator_trust": 71,
+    "uptime_percent": 100,
+    "confidence": "high",
+    "observations": 5149
+  },
+  "operator_wot": {
+    "pubkey": "32e1827...",
+    "wot_score": 18,
+    "followers": 1358,
+    "in_graph": true
+  },
+  "combined_score": 68,
+  "source": "wot.klabo.world + trustedrelays.xyz"
+}
+```
+
+Responses are cached for 30 minutes to respect trustedrelays.xyz rate limits (60 req/min). Unknown relays gracefully return a 0 score.
 
 ## NIP-89 Handler Announcement
 
