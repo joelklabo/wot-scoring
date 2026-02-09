@@ -217,22 +217,48 @@ func normalizeScore(raw float64, total int) int {
 	return int(math.Round(score))
 }
 
+// resolvePubkey converts npub to hex if needed, returns hex pubkey or error.
+func resolvePubkey(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if strings.HasPrefix(input, "npub") {
+		_, v, err := nip19.Decode(input)
+		if err != nil {
+			return "", fmt.Errorf("invalid npub: %w", err)
+		}
+		return v.(string), nil
+	}
+	return input, nil
+}
+
 func handleScore(w http.ResponseWriter, r *http.Request) {
-	pubkey := r.URL.Query().Get("pubkey")
-	if pubkey == "" {
+	raw := r.URL.Query().Get("pubkey")
+	if raw == "" {
 		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	pubkey, err := resolvePubkey(raw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 
 	score, ok := graph.GetScore(pubkey)
 	stats := graph.Stats()
+	m := meta.Get(pubkey)
 
 	resp := map[string]interface{}{
 		"pubkey":     pubkey,
 		"raw_score":  score,
-		"rank_score": normalizeScore(score, stats.Nodes),
+		"score":      normalizeScore(score, stats.Nodes),
 		"found":      ok,
 		"graph_size": stats.Nodes,
+		"followers":     m.Followers,
+		"post_count":    m.PostCount,
+		"reply_count":   m.ReplyCount,
+		"reactions":     m.ReactionsRecd,
+		"zap_amount":    m.ZapAmtRecd,
+		"zap_count":     m.ZapCntRecd,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -687,9 +713,15 @@ func handleExternal(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleMetadata(w http.ResponseWriter, r *http.Request) {
-	pubkey := r.URL.Query().Get("pubkey")
-	if pubkey == "" {
+	raw := r.URL.Query().Get("pubkey")
+	if raw == "" {
 		http.Error(w, `{"error":"pubkey parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	pubkey, err := resolvePubkey(raw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 
@@ -757,6 +789,20 @@ h1{font-size:2rem;color:#fff;margin-bottom:.25rem}
 #result{margin-top:1rem;min-height:2rem}
 .score-card{background:#111;border:1px solid #222;border-radius:8px;padding:1.5rem;margin-top:1rem}
 .score-big{font-size:3rem;font-weight:700;color:#7c3aed}
+.score-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-top:1rem}
+.score-detail{text-align:center}
+.score-detail-value{font-size:1.2rem;font-weight:600;color:#fff}
+.score-detail-label{font-size:.75rem;color:#666}
+.leaderboard{margin:2rem 0}
+.leaderboard h2{font-size:1.3rem;color:#fff;margin-bottom:1rem}
+.lb-table{width:100%%;border-collapse:collapse}
+.lb-table th{text-align:left;padding:.5rem .75rem;color:#888;font-size:.8rem;font-weight:500;border-bottom:1px solid #222}
+.lb-table td{padding:.5rem .75rem;border-bottom:1px solid #1a1a1a;font-size:.9rem}
+.lb-table tr:hover{background:#111}
+.lb-rank{color:#7c3aed;font-weight:700;width:3rem}
+.lb-pubkey{font-family:monospace;color:#aaa}
+.lb-score{color:#fff;font-weight:600;text-align:right}
+.lb-followers{color:#666;text-align:right}
 .endpoints{margin:2rem 0}
 .endpoints h2{font-size:1.3rem;color:#fff;margin-bottom:1rem}
 .endpoint{background:#111;border:1px solid #222;border-radius:6px;padding:.75rem 1rem;margin-bottom:.5rem;font-family:monospace;font-size:.9rem}
@@ -771,6 +817,8 @@ h1{font-size:2rem;color:#fff;margin-bottom:.25rem}
 footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid #222;color:#555;font-size:.85rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
 footer a{color:#7c3aed;text-decoration:none}
 footer a:hover{text-decoration:underline}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .3s ease-out}
 </style>
 </head>
 <body>
@@ -791,8 +839,16 @@ footer a:hover{text-decoration:underline}
 </div>
 
 <div class="search">
-<input type="text" id="pubkey-input" placeholder="Enter a Nostr pubkey (hex or npub) to look up trust score..." autofocus>
+<input type="text" id="pubkey-input" placeholder="Enter npub or hex pubkey to look up trust score..." autofocus>
 <div id="result"></div>
+</div>
+
+<div class="leaderboard">
+<h2>Trust Leaderboard</h2>
+<table class="lb-table">
+<thead><tr><th>Rank</th><th>Pubkey</th><th style="text-align:right">Score</th><th style="text-align:right">Followers</th></tr></thead>
+<tbody id="lb-body"><tr><td colspan="4" style="color:#555">Loading...</td></tr></tbody>
+</table>
 </div>
 
 <div class="nip85">
@@ -805,8 +861,8 @@ footer a:hover{text-decoration:underline}
 
 <div class="endpoints">
 <h2>API Endpoints</h2>
-<div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex&gt;</span><span class="desc">— Trust score (kind 30382)</span></div>
-<div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust score + metadata</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/top</span><span class="desc">— Top 50 scored pubkeys</span></div>
@@ -824,11 +880,30 @@ footer a:hover{text-decoration:underline}
 <script>
 const input=document.getElementById("pubkey-input"),result=document.getElementById("result");
 let timer;
+function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+"M";if(n>=1e3)return(n/1e3).toFixed(1)+"K";return n.toString()}
 input.addEventListener("input",()=>{clearTimeout(timer);const v=input.value.trim();if(!v){result.innerHTML="";return}
 timer=setTimeout(()=>{fetch("/score?pubkey="+encodeURIComponent(v)).then(r=>r.json()).then(d=>{
-if(d.error){result.innerHTML='<div class="score-card" style="color:#f87171">'+d.error+'</div>';return}
-result.innerHTML='<div class="score-card"><div class="score-big">'+d.score+'/100</div><div style="color:#888;margin-top:.5rem">'+d.pubkey.slice(0,16)+'...</div></div>';
-}).catch(()=>{result.innerHTML='<div class="score-card" style="color:#f87171">Error fetching score</div>'})},400)});
+if(d.error){result.innerHTML='<div class="score-card fade-in" style="color:#f87171">'+d.error+'</div>';return}
+let html='<div class="score-card fade-in"><div class="score-big">'+d.score+'/100</div>';
+html+='<div style="color:#888;margin-top:.25rem;font-family:monospace;font-size:.85rem">'+d.pubkey+'</div>';
+html+='<div class="score-details">';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.followers||0)+'</div><div class="score-detail-label">Followers</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.post_count||0)+'</div><div class="score-detail-label">Posts</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reactions||0)+'</div><div class="score-detail-label">Reactions</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.zap_amount||0)+'</div><div class="score-detail-label">Sats Received</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.zap_count||0)+'</div><div class="score-detail-label">Zaps</div></div>';
+html+='<div class="score-detail"><div class="score-detail-value">'+fmt(d.reply_count||0)+'</div><div class="score-detail-label">Replies</div></div>';
+html+='</div></div>';
+result.innerHTML=html;
+}).catch(()=>{result.innerHTML='<div class="score-card fade-in" style="color:#f87171">Error fetching score</div>'})},400)});
+
+// Load leaderboard
+fetch("/top").then(r=>r.json()).then(data=>{
+const tbody=document.getElementById("lb-body");
+if(!data||!data.length){tbody.innerHTML='<tr><td colspan="4" style="color:#555">No data yet</td></tr>';return}
+const top10=data.slice(0,10);
+tbody.innerHTML=top10.map((e,i)=>'<tr><td class="lb-rank">'+(i+1)+'</td><td class="lb-pubkey">'+e.pubkey.slice(0,12)+'...'+e.pubkey.slice(-8)+'</td><td class="lb-score">'+(e.rank||"—")+'</td><td class="lb-followers">—</td></tr>').join("");
+}).catch(()=>{document.getElementById("lb-body").innerHTML='<tr><td colspan="4" style="color:#555">Failed to load</td></tr>'});
 </script>
 </body>
 </html>`
