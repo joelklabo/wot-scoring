@@ -50,6 +50,7 @@ GET /communities             — Top trust communities (label propagation cluste
 GET /communities?pubkey=<hex>— Community membership and top peers for a pubkey
 GET /nip05?id=user@domain    — NIP-05 verification + WoT trust profile (resolves identity to pubkey)
 POST /nip05/batch            — Bulk NIP-05 verification (up to 50 identifiers, concurrent)
+GET /nip05/reverse?pubkey=<hex|npub> — Reverse NIP-05 lookup (pubkey → NIP-05 identity, bidirectional verification)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -627,6 +628,32 @@ Response:
 
 Failed resolutions return per-item errors without failing the entire batch. Useful for clients that need to verify contact lists, organization directories, or NIP-05-heavy platforms.
 
+## Reverse NIP-05 Lookup
+
+Given a pubkey, find its NIP-05 identity — the inverse of standard NIP-05 resolution. Fetches the pubkey's kind 0 profile from relays, extracts the NIP-05 field, and bidirectionally verifies it resolves back to the same pubkey.
+
+```
+GET /nip05/reverse?pubkey=<hex|npub>
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
+  "nip05": "_@jb55.com",
+  "display_name": "jb55",
+  "verified": true,
+  "score": 92,
+  "found": true,
+  "graph_size": 51446,
+  "followers": 12847,
+  "nip05_relays": ["wss://relay.damus.io"]
+}
+```
+
+If the pubkey has no kind 0 profile or no NIP-05 field set, the response still includes trust score data with `verified: false` and an error message. Useful for answering "who is this pubkey?" when you only have a hex key or npub.
+
 ## L402 Lightning Paywall
 
 The API supports the [L402 protocol](https://docs.lightning.engineering/the-lightning-network/l402) for pay-per-query access via Lightning Network micropayments.
@@ -638,7 +665,7 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | Endpoint | Price |
 |----------|-------|
 | `/score`, `/decay`, `/nip05` | 1 sat |
-| `/personalized`, `/similar`, `/recommend`, `/compare` | 2 sats |
+| `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse` | 2 sats |
 | `/audit`, `/nip05/batch` | 5 sats |
 | `/batch` | 10 sats |
 

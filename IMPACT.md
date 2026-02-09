@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 28+ API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 29+ API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 28+ endpoints serve live data. 185 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single and bulk verification tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 29+ endpoints serve live data. 189 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -43,6 +43,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Authorization tracking** (`/authorized`) — consumes kind 10040 events from relays, showing which users have explicitly authorized specific NIP-85 scoring providers.
 - **NIP-05 identity verification** (`/nip05`) — resolves NIP-05 identifiers (user@domain) to pubkeys via standard `.well-known/nostr.json`, then returns the full WoT trust profile. Bridges the Nostr identity layer with NIP-85 trust assertions in a single API call.
 - **Bulk NIP-05 verification** (`POST /nip05/batch`) — resolves up to 50 NIP-05 identifiers concurrently and returns trust profiles for each. Enables clients to verify and trust-score entire contact lists or directories in a single request.
+- **Reverse NIP-05 lookup** (`/nip05/reverse`) — given a pubkey, fetches their kind 0 profile from relays, extracts the NIP-05 identifier, and bidirectionally verifies it resolves back to the same pubkey. Enables "who is this pubkey?" identity lookups — the inverse of standard NIP-05 resolution.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
@@ -53,6 +54,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)
 - **NIP-05 identity resolution** — `/nip05` endpoint resolves NIP-05 identifiers to pubkeys and returns WoT trust profiles, bridging identity verification with trust scoring
 - **Bulk NIP-05 verification** — `POST /nip05/batch` resolves up to 50 identifiers concurrently, enabling directory-scale identity-to-trust verification
+- **Reverse NIP-05 lookup** — `/nip05/reverse` resolves pubkey→NIP-05 by fetching kind 0 profiles from relays, with bidirectional verification
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 
@@ -75,7 +77,7 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 185 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single and bulk verification, topics, activity hours, reports, and API handlers
+- 189 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, topics, activity hours, reports, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability
@@ -95,6 +97,7 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 | `/similar` | 2 sats | 10/day per IP |
 | `/recommend` | 2 sats | 10/day per IP |
 | `/compare` | 2 sats | 10/day per IP |
+| `/nip05/reverse` | 2 sats | 10/day per IP |
 | `/audit` | 5 sats | 10/day per IP |
 | `/nip05/batch` | 5 sats | 10/day per IP |
 | `/batch` | 10 sats | 10/day per IP |
