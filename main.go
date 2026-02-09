@@ -26,18 +26,20 @@ var relays = []string{
 
 // Graph stores the follow relationships
 type Graph struct {
-	mu        sync.RWMutex
-	follows   map[string][]string // pubkey -> list of followed pubkeys
-	followers map[string][]string // pubkey -> list of followers
-	scores    map[string]float64  // pubkey -> PageRank score
-	lastBuild time.Time
+	mu          sync.RWMutex
+	follows     map[string][]string    // pubkey -> list of followed pubkeys
+	followers   map[string][]string    // pubkey -> list of followers
+	scores      map[string]float64     // pubkey -> PageRank score
+	followTimes map[string]time.Time   // "from:to" -> when the follow was created
+	lastBuild   time.Time
 }
 
 func NewGraph() *Graph {
 	return &Graph{
-		follows:   make(map[string][]string),
-		followers: make(map[string][]string),
-		scores:    make(map[string]float64),
+		follows:     make(map[string][]string),
+		followers:   make(map[string][]string),
+		scores:      make(map[string]float64),
+		followTimes: make(map[string]time.Time),
 	}
 }
 
@@ -247,10 +249,11 @@ func crawlFollows(ctx context.Context, seedPubkeys []string, depth int) {
 				}
 				seen[author] = true
 
+				eventTime := ev.Event.CreatedAt.Time()
 				for _, tag := range ev.Event.Tags {
 					if tag[0] == "p" && len(tag) >= 2 {
 						target := tag[1]
-						graph.AddFollow(author, target)
+						graph.AddFollowWithTime(author, target, eventTime)
 						if !seen[target] {
 							nextQueue = append(nextQueue, target)
 						}
@@ -1747,6 +1750,8 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/relay?url=&lt;wss://...&gt;</span><span class="desc">— Relay trust + operator WoT</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/compare?a=&lt;pubkey&gt;&amp;b=&lt;pubkey&gt;</span><span class="desc">— Compare two pubkeys trust relationship</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/decay?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Time-decayed trust score (newer follows weigh more)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/decay/top</span><span class="desc">— Top pubkeys by decay-adjusted score with rank changes</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/top</span><span class="desc">— Top 50 scored pubkeys</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
@@ -1917,6 +1922,8 @@ func main() {
 	http.HandleFunc("/external", handleExternal)
 	http.HandleFunc("/relay", handleRelay)
 	http.HandleFunc("/compare", handleCompare)
+	http.HandleFunc("/decay", handleDecay)
+	http.HandleFunc("/decay/top", handleDecayTop)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -1950,6 +1957,8 @@ POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["h
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)
 /external — Top 50 external identifiers (hashtags, URLs)
 /relay?url=<wss://...> — Relay trust + operator WoT (via trustedrelays.xyz)
+/decay?pubkey=<hex> — Time-decayed trust score (newer follows weigh more, configurable half-life)
+/decay/top — Top pubkeys by decay-adjusted score with rank changes vs static
 /providers — External NIP-85 assertion providers and their assertion counts
 /top — Top 50 scored pubkeys
 /export — All scores as JSON
