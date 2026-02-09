@@ -1905,6 +1905,7 @@ footer a:hover{text-decoration:underline}
 <div class="tab" data-tab="path">Trust Path</div>
 <div class="tab" data-tab="nip05">NIP-05 Verify</div>
 <div class="tab" data-tab="nip05reverse">NIP-05 Reverse</div>
+<div class="tab" data-tab="timeline">Timeline</div>
 </div>
 
 <div class="tab-content active" id="tab-lookup">
@@ -1948,6 +1949,14 @@ footer a:hover{text-decoration:underline}
 <div class="search">
 <input type="text" id="nip05reverse-input" placeholder="Enter hex pubkey or npub to find NIP-05 identity...">
 <div id="nip05reverse-result"></div>
+</div>
+</div>
+
+<div class="tab-content" id="tab-timeline">
+<p style="color:#888;margin-bottom:1rem;font-size:.9rem">See how a pubkey's trust grew over time. Uses follow timestamps to reconstruct trust evolution.</p>
+<div class="search">
+<input type="text" id="timeline-input" placeholder="Enter hex pubkey or npub to see trust timeline...">
+<div id="timeline-result"></div>
 </div>
 </div>
 
@@ -2244,6 +2253,43 @@ html+='<div style="color:#888;font-size:.9rem;margin-top:.5rem">Score: '+(d.scor
 html+='</div>';
 nip05revResult.innerHTML=html;
 }).catch(()=>{err(nip05revResult,"Error looking up NIP-05")})},800)});
+
+const tlInput=document.getElementById("timeline-input"),tlResult=document.getElementById("timeline-result");
+let tlTimer;
+tlInput.addEventListener("input",()=>{clearTimeout(tlTimer);const v=tlInput.value.trim();if(!v){tlResult.innerHTML="";return}
+if(v.length<63&&!v.startsWith("npub1")){tlResult.innerHTML='<div style="color:#888;margin-top:.5rem;font-size:.9rem">Enter a 64-char hex pubkey or npub</div>';return}
+tlTimer=setTimeout(()=>{
+tlResult.innerHTML='<div style="color:#555;margin-top:.5rem">Loading timeline...</div>';
+const pk=v.length===64?v:v;
+fetch("/timeline?pubkey="+encodeURIComponent(pk)).then(r=>r.json()).then(d=>{
+if(d.error){err(tlResult,d.error);return}
+let html='<div class="score-card fade-in">';
+html+='<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">';
+html+='<div class="score-big">'+d.current_score+'/100</div>';
+html+='<span style="color:#888;font-size:.9rem">'+fmt(d.current_followers)+' followers</span>';
+html+='</div>';
+if(d.first_follow){html+='<div style="color:#888;font-size:.85rem;margin-top:.5rem">First follow: '+d.first_follow.slice(0,10)+' &mdash; Latest: '+(d.latest_follow||'').slice(0,10)+'</div>'}
+html+='<div style="color:#666;font-size:.85rem">'+d.followers_with_dates+' of '+d.total_followers+' followers have date data</div>';
+if(d.points&&d.points.length>0){
+html+='<div style="margin-top:1rem">';
+const maxF=d.points[d.points.length-1].cumulative_follows||1;
+d.points.forEach(p=>{
+const pct=Math.round((p.cumulative_follows/maxF)*100);
+const barColor=p.velocity>1?'#10b981':p.velocity>0.3?'#3b82f6':'#6366f1';
+html+='<div style="display:flex;align-items:center;gap:.5rem;margin:.25rem 0;font-size:.8rem">';
+html+='<span style="width:60px;color:#888;flex-shrink:0">'+p.date+'</span>';
+html+='<div style="flex:1;background:#1a1a2e;border-radius:4px;height:20px;position:relative;overflow:hidden">';
+html+='<div style="width:'+pct+'%%;height:100%%;background:'+barColor+';border-radius:4px;transition:width .3s"></div>';
+html+='</div>';
+html+='<span style="width:40px;color:#ccc;text-align:right;flex-shrink:0">'+p.cumulative_follows+'</span>';
+html+='<span style="width:50px;color:#888;text-align:right;flex-shrink:0;font-size:.75rem">+'+p.new_follows+'</span>';
+html+='</div>'});
+html+='</div>';
+html+='<div style="margin-top:.5rem;font-size:.75rem;color:#666">Bar = cumulative followers | +N = new that month | Color: green=fast, blue=moderate, purple=slow growth</div>';
+}else{html+='<div style="color:#888;margin-top:1rem">No timeline data available (followers lack date information)</div>'}
+html+='</div>';
+tlResult.innerHTML=html;
+}).catch(()=>{err(tlResult,"Error loading timeline")})},600)});
 </script>
 </body>
 </html>`
@@ -2396,6 +2442,7 @@ func main() {
 	http.HandleFunc("/nip05", handleNIP05)
 	http.HandleFunc("/nip05/batch", handleNIP05Batch)
 	http.HandleFunc("/nip05/reverse", handleNIP05Reverse)
+	http.HandleFunc("/timeline", handleTimeline)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

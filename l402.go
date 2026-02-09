@@ -49,6 +49,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/nip05":         1,
 			"/nip05/batch":   5,
 			"/nip05/reverse": 2,
+			"/timeline":      2,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),
