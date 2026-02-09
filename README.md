@@ -672,11 +672,14 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | Endpoint | Price |
 |----------|-------|
 | `/score`, `/decay`, `/nip05` | 1 sat |
-| `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse` | 2 sats |
+| `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam` | 2 sats |
+| `/weboftrust` | 3 sats |
 | `/audit`, `/nip05/batch` | 5 sats |
-| `/batch` | 10 sats |
+| `/batch`, `/spam/batch` | 10 sats |
 
-All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`) are free and unlimited.
+All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`) are free and unlimited.
+
+**Interactive API documentation:** [https://wot.klabo.world/docs](https://wot.klabo.world/docs)
 
 **Usage flow:**
 

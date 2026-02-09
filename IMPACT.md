@@ -83,7 +83,8 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 225 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, topics, activity hours, reports, and API handlers
+- 227 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, topics, activity hours, reports, API handlers, and API documentation
+- Interactive API documentation at `/docs` with 27 endpoint cards, request/response examples, and live "Try it" buttons
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability
