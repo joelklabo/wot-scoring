@@ -402,6 +402,22 @@ Response:
 
 When external NIP-85 assertions exist, the response includes a `composite` object showing the 70/30 internal/external weighting and per-provider breakdown instead of `final_score`.
 
+## Trust Comparison
+
+Compare two pubkeys side-by-side to understand their relationship in the Web of Trust:
+
+```
+GET /compare?a=<pubkey|npub>&b=<pubkey|npub>
+```
+
+Returns:
+- **Direct relationship**: mutual, a_follows_b, b_follows_a, or none
+- **Profile stats**: WoT score, rank, percentile, follows/followers count for each
+- **Shared follows**: top 20 people both pubkeys follow (ranked by WoT score)
+- **Shared followers**: top 20 people who follow both pubkeys (ranked by WoT score)
+- **Follow similarity**: Jaccard index (0.0-1.0) of their follow sets
+- **Trust path**: shortest path between the two pubkeys via BFS
+
 ## Batch Scoring
 
 Score up to 100 pubkeys in a single request:
