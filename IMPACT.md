@@ -14,16 +14,17 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 29+ API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 30+ API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 29+ endpoints serve live data. 189 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 30+ endpoints serve live data. 196 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, and trust timeline tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
 - **Compare** — side-by-side trust comparison with relationship badges and shared follow analysis
 - **Trust Path** — BFS shortest path visualization between any two pubkeys
+- **Timeline** — trust evolution over time with monthly follower growth bars and velocity coloring
 - **Leaderboard** — top 10 pubkeys with live data from the scoring API
 
 ## Depth & Innovation

@@ -51,6 +51,7 @@ GET /communities?pubkey=<hex>— Community membership and top peers for a pubkey
 GET /nip05?id=user@domain    — NIP-05 verification + WoT trust profile (resolves identity to pubkey)
 POST /nip05/batch            — Bulk NIP-05 verification (up to 50 identifiers, concurrent)
 GET /nip05/reverse?pubkey=<hex|npub> — Reverse NIP-05 lookup (pubkey → NIP-05 identity, bidirectional verification)
+GET /timeline?pubkey=<hex|npub> — Trust timeline: monthly follower growth and estimated score evolution over time
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -67,6 +68,7 @@ The landing page at [wot.klabo.world](https://wot.klabo.world) includes three in
 - **Trust Communities** — Visualize detected trust clusters with member counts and top-ranked members
 - **Compare** — Side-by-side comparison of two pubkeys with relationship badges (mutual follow, shared follows, trusted followers) and bar charts
 - **Trust Path** — BFS shortest-path visualization showing each hop with WoT scores between any two pubkeys
+- **Timeline** — Trust evolution visualization showing monthly follower growth bars with velocity coloring
 
 ## Run
 
