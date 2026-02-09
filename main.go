@@ -1161,6 +1161,7 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 		"damping_factor":      0.85,
 		"relays":              relays,
 		"score_range":         "0-100 (normalized)",
+		"rate_limit":          "100 req/min per IP",
 		"timestamp":           time.Now().UTC().Format(time.RFC3339),
 		"verification_method": "follow-graph-crawl",
 	}
@@ -1958,6 +1959,10 @@ POST /publish — Publish NIP-85 kind 30382/30383/30384/30385 events to relays`,
 		})
 	})
 
+	// Rate limiter: 100 requests/minute per IP (free tier)
+	limiter := NewRateLimiter(100, time.Minute)
+	log.Printf("Rate limiting enabled: 100 req/min per IP")
+
 	log.Printf("WoT Scoring API listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(http.DefaultServeMux)))
+	log.Fatal(http.ListenAndServe(":"+port, RateLimitMiddleware(limiter, corsMiddleware(http.DefaultServeMux))))
 }
