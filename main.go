@@ -1906,6 +1906,7 @@ footer a{color:#7c3aed}
 <a href="#infrastructure">Infrastructure</a>
 <a href="#influence">Influence</a>
 <a href="#trust-circles">Trust Circles</a>
+<a href="#follow-quality">Follow Quality</a>
 <a href="#network-health">Network Health</a>
 </div>
 
@@ -2661,6 +2662,60 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
     "top_role": "participant",
     "role_counts": {"hub": 3, "authority": 12, "connector": 28, "participant": 144}
   },
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
+<!-- ===== FOLLOW QUALITY ===== -->
+<h2 id="follow-quality">Follow Quality</h2>
+<p class="section-intro">Analyze the quality and health of a pubkey's follow list. Help users curate better follow lists.</p>
+
+<div class="endpoint-card" id="ep-follow-quality">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/follow-quality</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Evaluates the quality of who a pubkey follows. Scores each follow by trust score and categorizes into tiers (strong/moderate/weak/unknown). Returns an overall quality score (0-100), breakdown metrics (average trust, reciprocity, diversity, signal ratio), and suggests low-quality follows to reconsider.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub to analyze <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">suggestions</span><span class="param-type">integer</span><span class="param-desc">Max low-quality suggestions (default 10, max 50)</span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "32e1827635...",
+  "trust_score": 78,
+  "follow_count": 342,
+  "quality_score": 67,
+  "classification": "good",
+  "breakdown": {
+    "avg_trust_score": 28.4,
+    "median_trust_score": 24,
+    "diversity": 0.812,
+    "reciprocity": 0.623,
+    "signal_ratio": 0.891
+  },
+  "categories": {
+    "strong": 45,
+    "moderate": 128,
+    "weak": 132,
+    "unknown": 37
+  },
+  "suggestions": [
+    {
+      "pubkey": "abc123...",
+      "trust_score": 0,
+      "reason": "not found in trust graph — may be inactive or a ghost account; does not follow you back"
+    },
+    {
+      "pubkey": "def456...",
+      "trust_score": 3,
+      "reason": "very low trust score (3) — minimal network presence"
+    }
+  ],
   "graph_size": 51319
 }</div>
 </div>
@@ -3848,6 +3903,7 @@ func main() {
 	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/compare-providers", handleCompareProviders)
 	http.HandleFunc("/trust-circle", handleTrustCircle)
+	http.HandleFunc("/follow-quality", handleFollowQuality)
 	http.HandleFunc("/demo", handleDemo)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
 	http.HandleFunc("/openapi.json", handleOpenAPI)

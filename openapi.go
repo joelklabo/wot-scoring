@@ -52,7 +52,8 @@ const openAPISpec = `{
     {"name": "Real-Time", "description": "WebSocket streaming for live score updates"},
     {"name": "Network Analysis", "description": "Graph topology health metrics and network-wide analysis"},
     {"name": "Cross-Provider", "description": "Compare WoT scores across multiple NIP-85 providers for consensus analysis"},
-    {"name": "Trust Circles", "description": "Mutual-follow trust circle analysis with cohesion, density, and role metrics"}
+    {"name": "Trust Circles", "description": "Mutual-follow trust circle analysis with cohesion, density, and role metrics"},
+    {"name": "Follow Quality", "description": "Analyze the quality and health of a pubkey's follow list"}
   ],
   "paths": {
     "/score": {
@@ -792,6 +793,23 @@ const openAPISpec = `{
         ],
         "responses": {
           "200": {"description": "Trust circle analysis with members, inner circle, and metrics"},
+          "400": {"description": "Missing or invalid pubkey"},
+          "402": {"description": "L402 payment required (5 sats)"}
+        }
+      }
+    },
+    "/follow-quality": {
+      "get": {
+        "tags": ["Follow Quality"],
+        "operationId": "getFollowQuality",
+        "summary": "Analyze the quality of a pubkey's follow list",
+        "description": "Evaluates the quality of who a pubkey follows, scoring each follow by trust score and categorizing into tiers (strong/moderate/weak/unknown). Returns an overall quality score (0-100), breakdown metrics (avg trust, reciprocity, diversity, signal ratio), category counts, and suggestions for low-quality follows to reconsider. Useful for Nostr clients to help users curate healthier follow lists.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Hex pubkey or npub to analyze"},
+          {"name": "suggestions", "in": "query", "required": false, "schema": {"type": "integer", "default": 10, "minimum": 0, "maximum": 50}, "description": "Max number of low-quality follow suggestions to return"}
+        ],
+        "responses": {
+          "200": {"description": "Follow quality analysis with breakdown, categories, and suggestions"},
           "400": {"description": "Missing or invalid pubkey"},
           "402": {"description": "L402 payment required (5 sats)"}
         }
