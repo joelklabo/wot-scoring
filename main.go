@@ -1746,6 +1746,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/relay?url=&lt;wss://...&gt;</span><span class="desc">— Relay trust + operator WoT</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/compare?a=&lt;pubkey&gt;&amp;b=&lt;pubkey&gt;</span><span class="desc">— Compare two pubkeys trust relationship</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/top</span><span class="desc">— Top 50 scored pubkeys</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external</span><span class="desc">— Top 50 external identifiers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/stats</span><span class="desc">— Service statistics</span></div>
@@ -1915,6 +1916,7 @@ func main() {
 	http.HandleFunc("/event", handleEventScore)
 	http.HandleFunc("/external", handleExternal)
 	http.HandleFunc("/relay", handleRelay)
+	http.HandleFunc("/compare", handleCompare)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
