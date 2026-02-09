@@ -2293,6 +2293,70 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== SYBIL RESISTANCE ===== -->
+<h2 id="sybil">Sybil Resistance</h2>
+<p class="section-intro">Sybil detection and resistance scoring for relay operators. Combines five graph analysis signals into a single actionable score.</p>
+
+<div class="endpoint-card" id="ep-sybil">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/sybil</span>
+<span class="price-tag">3 sats</span>
+</div>
+<div class="desc">Computes a Sybil resistance score (0-100, where 100 = most genuine) by analyzing five signals: follower quality, mutual trust, score-rank consistency, follower diversity, and account substance. Returns a classification (genuine, likely_genuine, suspicious, likely_sybil), confidence level, and full signal breakdown. Designed for relay operators to gate access or filter content.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub to analyze <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "abc123...",
+  "sybil_score": 82,
+  "classification": "genuine",
+  "confidence": 0.9,
+  "signals": [
+    {"name": "follower_quality", "score": 0.85, "weight": 0.3, "description": "Average follower WoT score: 25.5", "value": 25.5},
+    {"name": "mutual_trust", "score": 0.8, "weight": 0.25, "description": "12 mutual follows (3 high-value)", "value": 12},
+    {"name": "score_consistency", "score": 0.75, "weight": 0.15, "description": "PageRank percentile 85%...", "value": 0.85},
+    {"name": "follower_diversity", "score": 0.9, "weight": 0.15, "description": "Follower neighborhood diversity", "value": 0.9},
+    {"name": "account_substance", "score": 0.7, "weight": 0.15, "description": "Account substance: score 42...", "value": 42}
+  ],
+  "trust_score": 42,
+  "rank": 1500,
+  "followers": 200,
+  "follows": 150,
+  "mutual_count": 12,
+  "high_value_mutuals": 3,
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-sybil-batch">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/sybil/batch</span>
+<span class="price-tag">10 sats</span>
+</div>
+<div class="desc">Batch Sybil resistance scoring for up to 50 pubkeys. Uses simplified scoring for performance. Results sorted by sybil_score ascending (most suspicious first). Useful for relay operators filtering event streams or moderating communities.</div>
+<div class="params">
+<div class="params-title">Request Body</div>
+<div class="param"><span class="param-name">pubkeys</span><span class="param-type">string[]</span><span class="param-desc">Array of hex pubkeys or npubs (max 50) <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "results": [
+    {"pubkey": "suspicious123...", "sybil_score": 15, "classification": "likely_sybil", "trust_score": 2, "followers": 500},
+    {"pubkey": "genuine456...", "sybil_score": 85, "classification": "genuine", "trust_score": 67, "followers": 120}
+  ],
+  "count": 2,
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2770,6 +2834,8 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">GET</span><span class="path">/timeline?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Historical trust growth timeline</span></div>
 <div class="endpoint"><span class="method">POST</span><span class="path">/verify</span><span class="desc">— Cross-provider NIP-85 assertion verification</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/anomalies?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust anomaly detection and risk assessment</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/sybil?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Sybil resistance scoring (0-100, multi-signal analysis)</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -2779,9 +2845,10 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify, /weboftrust (3 sats), /anomalies (3 sats)</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
+<div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
-<div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
+<div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
 </div>
@@ -3327,6 +3394,8 @@ func main() {
 	http.HandleFunc("/blocked", handleBlocked)
 	http.HandleFunc("/verify", handleVerify)
 	http.HandleFunc("/anomalies", handleAnomalies)
+	http.HandleFunc("/sybil", handleSybil)
+	http.HandleFunc("/sybil/batch", handleSybilBatch)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

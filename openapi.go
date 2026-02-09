@@ -44,7 +44,8 @@ const openAPISpec = `{
     {"name": "Ranking", "description": "Leaderboards, statistics, and exports"},
     {"name": "Infrastructure", "description": "Health, providers, relay trust, communities, publishing"},
     {"name": "Visualization", "description": "D3.js-compatible graph data and trust comparison"},
-    {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"}
+    {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"},
+    {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"}
   ],
   "paths": {
     "/score": {
@@ -577,6 +578,50 @@ const openAPISpec = `{
           "200": {"description": "Anomaly analysis with risk level and individual flags"},
           "400": {"description": "Missing or invalid pubkey"},
           "402": {"description": "L402 payment required (3 sats)"}
+        }
+      }
+    },
+    "/sybil": {
+      "get": {
+        "tags": ["Sybil Resistance"],
+        "operationId": "getSybilScore",
+        "summary": "Sybil resistance score for a pubkey",
+        "description": "Computes a Sybil resistance score (0-100) by analyzing five signals: follower quality (average WoT score of followers), mutual trust (organic bidirectional relationships), score-rank consistency (PageRank vs follower count alignment), follower diversity (neighborhood spread), and account substance (overall activity). Returns a classification (genuine, likely_genuine, suspicious, likely_sybil), confidence level, and full signal breakdown. Designed for relay operators to gate access or filter content.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Hex pubkey or npub to analyze"}
+        ],
+        "responses": {
+          "200": {"description": "Sybil resistance analysis with score, classification, and signal breakdown"},
+          "400": {"description": "Missing or invalid pubkey"},
+          "402": {"description": "L402 payment required (3 sats)"}
+        }
+      }
+    },
+    "/sybil/batch": {
+      "post": {
+        "tags": ["Sybil Resistance"],
+        "operationId": "batchSybilScore",
+        "summary": "Batch Sybil resistance scoring for up to 50 pubkeys",
+        "description": "Scores multiple pubkeys for Sybil resistance in one request. Uses a simplified scoring model for performance. Results sorted by sybil_score ascending (most suspicious first). Useful for relay operators filtering event streams.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["pubkeys"],
+                "properties": {
+                  "pubkeys": {"type": "array", "items": {"type": "string"}, "maxItems": 50, "description": "Array of hex pubkeys or npubs"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Array of Sybil scores sorted by suspicion level"},
+          "400": {"description": "Invalid JSON or missing pubkeys"},
+          "402": {"description": "L402 payment required (10 sats)"},
+          "405": {"description": "Method not allowed (POST required)"}
         }
       }
     },

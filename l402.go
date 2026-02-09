@@ -56,6 +56,8 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/blocked":       2,
 			"/verify":        2,
 			"/anomalies":     3,
+			"/sybil":         3,
+			"/sybil/batch":   10,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),

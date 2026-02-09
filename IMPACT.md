@@ -18,7 +18,7 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 35 endpoints serve live data. 274 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 37 endpoints serve live data. 288 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -67,6 +67,7 @@ Beyond standard PageRank scoring, we implemented:
 - **Bulk NIP-05 verification** — `POST /nip05/batch` resolves up to 50 identifiers concurrently, enabling directory-scale identity-to-trust verification
 - **Reverse NIP-05 lookup** — `/nip05/reverse` resolves pubkey→NIP-05 by fetching kind 0 profiles from relays, with bidirectional verification
 - **Trust anomaly detection** — `/anomalies` provides Sybil-resistance analysis, helping clients identify accounts with artificially inflated follow counts or concentrated trust dependencies
+- **Sybil resistance scoring** — `/sybil` computes a 0-100 resistance score from five graph signals (follower quality, mutual trust, score consistency, follower diversity, account substance), with classifications and confidence levels for relay operators to gate access. `/sybil/batch` scores up to 50 pubkeys at once.
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 

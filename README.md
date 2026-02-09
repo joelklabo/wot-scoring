@@ -60,6 +60,8 @@ GET /blocked?pubkey=<hex|npub> — Who has this pubkey muted (their NIP-51 mute 
 GET /blocked?target=<hex|npub> — Who has muted this target (reverse lookup + community signal)
 POST /verify                 — Verify a NIP-85 kind 30382 assertion from any provider (cross-check signature + claims)
 GET /anomalies?pubkey=<hex|npub> — Trust anomaly detection: follow-farming, ghost followers, trust concentration, risk assessment
+GET /sybil?pubkey=<hex|npub> — Sybil resistance scoring (0-100, multi-signal analysis, classification)
+POST /sybil/batch            — Batch Sybil scoring for up to 50 pubkeys (sorted by suspicion)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
@@ -678,9 +680,9 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 |----------|-------|
 | `/score`, `/decay`, `/nip05` | 1 sat |
 | `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam`, `/blocked` | 2 sats |
-| `/weboftrust` | 3 sats |
+| `/weboftrust`, `/anomalies`, `/sybil` | 3 sats |
 | `/audit`, `/nip05/batch` | 5 sats |
-| `/batch`, `/spam/batch` | 10 sats |
+| `/batch`, `/spam/batch`, `/sybil/batch` | 10 sats |
 
 All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`, `/swagger`, `/openapi.json`) are free and unlimited.
 
