@@ -1,0 +1,391 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func handleDemo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, demoPageHTML)
+}
+
+const demoPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WoT Explorer — NIP-85 Trust Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .header {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 { font-size: 1.5rem; font-weight: 600; }
+  .header h1 span { color: var(--accent); }
+  .header p { color: var(--muted); font-size: 0.85rem; margin-top: 0.3rem; }
+  .search-bar {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    gap: 0.5rem;
+  }
+  .search-bar input {
+    width: 480px;
+    max-width: 70vw;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+  }
+  .search-bar input:focus { border-color: var(--accent); }
+  .search-bar button {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .search-bar button:hover { opacity: 0.9; }
+  .search-bar button:disabled { opacity: 0.5; cursor: wait; }
+  #status { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0.5rem; }
+  #status.error { color: var(--red); }
+  .dashboard {
+    display: none;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem;
+    gap: 1rem;
+  }
+  .dashboard.visible { display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 700px) { .dashboard.visible { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+  }
+  .card h2 { font-size: 0.9rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem; }
+  .card.full { grid-column: 1 / -1; }
+
+  /* Trust Score Gauge */
+  .gauge-container { display: flex; align-items: center; gap: 1.5rem; }
+  .gauge { position: relative; width: 120px; height: 120px; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gauge circle {
+    fill: none;
+    stroke-width: 10;
+    stroke-linecap: round;
+  }
+  .gauge .bg { stroke: var(--border); }
+  .gauge .fill { stroke: var(--accent); transition: stroke-dashoffset 0.8s ease; }
+  .gauge .value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(0deg);
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .gauge-details { flex: 1; }
+  .gauge-details .row { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  .gauge-details .row:last-child { border-bottom: none; }
+  .gauge-details .label { color: var(--muted); }
+
+  /* Role Badge */
+  .role-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .role-hub { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .role-authority { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .role-connector { background: rgba(63,185,80,0.15); color: var(--green); }
+  .role-participant { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .role-consumer, .role-observer, .role-isolated { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  /* Reputation Bars */
+  .rep-row { margin-bottom: 0.6rem; }
+  .rep-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.2rem; }
+  .rep-label .grade { font-weight: 700; }
+  .rep-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .rep-bar .fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .grade-a .fill { background: var(--green); }
+  .grade-b .fill { background: #3fb990; }
+  .grade-c .fill { background: var(--yellow); }
+  .grade-d .fill { background: #d97706; }
+  .grade-f .fill { background: var(--red); }
+
+  /* Sybil Indicator */
+  .sybil-score { font-size: 2.5rem; font-weight: 700; }
+  .sybil-label { font-size: 0.85rem; color: var(--muted); margin-top: 0.3rem; }
+  .sybil-signals { margin-top: 0.8rem; }
+  .sybil-signals .signal { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.25rem 0; }
+
+  /* Trust Circle */
+  .circle-stats { display: flex; gap: 1rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+  .circle-stat { text-align: center; }
+  .circle-stat .num { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+  .circle-stat .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+  .member-list { max-height: 260px; overflow-y: auto; }
+  .member {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .member:last-child { border-bottom: none; }
+  .member .rank { color: var(--muted); width: 2ch; text-align: right; }
+  .member .pk { font-family: monospace; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member .score { font-weight: 600; width: 3ch; text-align: right; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
+  .footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>WoT</span> Explorer</h1>
+  <p>NIP-85 Trust Dashboard — Enter a Nostr pubkey to explore their Web of Trust profile</p>
+</div>
+
+<div class="search-bar">
+  <input type="text" id="pubkeyInput" placeholder="npub1... or hex pubkey" autofocus>
+  <button id="searchBtn" onclick="doSearch()">Explore</button>
+</div>
+<div id="status"></div>
+
+<div class="dashboard" id="dashboard">
+  <div class="card" id="scoreCard">
+    <h2>Trust Score</h2>
+    <div class="gauge-container">
+      <div class="gauge">
+        <svg viewBox="0 0 120 120">
+          <circle class="bg" cx="60" cy="60" r="50"></circle>
+          <circle class="fill" id="gaugeCircle" cx="60" cy="60" r="50"
+            stroke-dasharray="314.16" stroke-dashoffset="314.16"></circle>
+        </svg>
+        <div class="value" id="scoreValue">—</div>
+      </div>
+      <div class="gauge-details" id="scoreDetails"></div>
+    </div>
+  </div>
+
+  <div class="card" id="sybilCard">
+    <h2>Sybil Resistance</h2>
+    <div id="sybilContent"></div>
+  </div>
+
+  <div class="card" id="reputationCard">
+    <h2>Reputation</h2>
+    <div id="reputationContent"></div>
+  </div>
+
+  <div class="card" id="circleCard">
+    <h2>Trust Circle</h2>
+    <div id="circleContent"></div>
+  </div>
+</div>
+
+<div class="footer">
+  Powered by <a href="/">WoT Scoring API</a> — NIP-85 Trusted Assertions
+  · <a href="/docs">API Docs</a> · <a href="/swagger">Swagger</a> · <a href="/openapi.json">OpenAPI</a>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const input = $('#pubkeyInput');
+const status = $('#status');
+const dashboard = $('#dashboard');
+const btn = $('#searchBtn');
+
+input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+async function doSearch() {
+  const raw = input.value.trim();
+  if (!raw) return;
+  btn.disabled = true;
+  status.className = '';
+  status.textContent = 'Loading...';
+  dashboard.classList.remove('visible');
+
+  try {
+    const base = window.location.origin;
+    const pk = encodeURIComponent(raw);
+
+    const [scoreRes, sybilRes, repRes, circleRes, influenceRes] = await Promise.all([
+      fetch(base + '/score?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/sybil?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/reputation?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/trust-circle?pubkey=' + pk).then(r => r.json()),
+      fetch(base + '/influence/batch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pubkeys: [raw]})
+      }).then(r => r.json())
+    ]);
+
+    if (scoreRes.error) throw new Error(scoreRes.error);
+
+    renderScore(scoreRes, influenceRes);
+    renderSybil(sybilRes);
+    renderReputation(repRes);
+    renderCircle(circleRes);
+
+    dashboard.classList.add('visible');
+    status.textContent = '';
+  } catch (e) {
+    status.className = 'error';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function scoreColor(score) {
+  if (score >= 70) return 'var(--green)';
+  if (score >= 40) return 'var(--yellow)';
+  if (score >= 20) return 'var(--accent)';
+  return 'var(--red)';
+}
+
+function renderScore(data, influence) {
+  const score = data.score ?? data.normalized_score ?? 0;
+  const pct = score / 100;
+  const circ = 314.16;
+  const circle = $('#gaugeCircle');
+  circle.style.strokeDashoffset = circ * (1 - pct);
+  circle.style.stroke = scoreColor(score);
+  $('#scoreValue').textContent = score;
+  $('#scoreValue').style.color = scoreColor(score);
+
+  const inf = influence.results?.[0] || {};
+  const role = inf.classification || '—';
+  const roleCls = 'role-' + role;
+
+  let details = '';
+  details += row('Rank', '#' + (data.rank || inf.rank || '—'));
+  details += row('Percentile', ((data.percentile || inf.percentile || 0) * 100).toFixed(1) + '%');
+  details += row('Followers', inf.followers || '—');
+  details += row('Following', inf.follows || '—');
+  details += row('Mutuals', inf.mutual_count || '—');
+  details += row('Role', '<span class="role-badge ' + roleCls + '">' + role + '</span>');
+  $('#scoreDetails').innerHTML = details;
+}
+
+function row(label, value) {
+  return '<div class="row"><span class="label">' + label + '</span><span>' + value + '</span></div>';
+}
+
+function renderSybil(data) {
+  const score = data.sybil_score ?? 0;
+  const cls = data.classification || '—';
+  let color = 'var(--green)';
+  if (score < 50) color = 'var(--yellow)';
+  if (score < 25) color = 'var(--red)';
+
+  let html = '<div class="sybil-score" style="color:' + color + '">' + score + '</div>';
+  html += '<div class="sybil-label">' + cls + '</div>';
+
+  if (data.signals) {
+    html += '<div class="sybil-signals">';
+    for (const [key, val] of Object.entries(data.signals)) {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      html += '<div class="signal"><span>' + label + '</span><span>' + (typeof val === 'number' ? val.toFixed(2) : val) + '</span></div>';
+    }
+    html += '</div>';
+  }
+  $('#sybilContent').innerHTML = html;
+}
+
+function renderReputation(data) {
+  const components = data.components || [];
+  let html = '';
+  for (const c of components) {
+    const pct = ((c.score || 0) * 100).toFixed(0);
+    const grade = c.grade || '?';
+    const gCls = 'grade-' + grade.toLowerCase();
+    html += '<div class="rep-row ' + gCls + '">';
+    html += '<div class="rep-label"><span>' + c.name + '</span><span class="grade">' + grade + ' (' + pct + '%)</span></div>';
+    html += '<div class="rep-bar"><div class="fill" style="width:' + pct + '%"></div></div>';
+    html += '</div>';
+  }
+  const total = data.reputation_score ?? 0;
+  html += '<div style="margin-top:0.8rem;font-size:0.9rem;">Overall: <strong>' + total + '/100</strong> — ' + (data.grade || '') + '</div>';
+  $('#reputationContent').innerHTML = html;
+}
+
+function renderCircle(data) {
+  const members = data.members || [];
+  const inner = data.inner_circle || [];
+  const metrics = data.metrics || {};
+
+  let html = '<div class="circle-stats">';
+  html += stat(data.circle_size || 0, 'Members');
+  html += stat((metrics.avg_trust_score || 0).toFixed(0), 'Avg Score');
+  html += stat(((metrics.cohesion || 0) * 100).toFixed(0) + '%', 'Cohesion');
+  html += stat(((metrics.density || 0) * 100).toFixed(0) + '%', 'Density');
+  html += '</div>';
+
+  html += '<div class="member-list">';
+  const show = inner.length > 0 ? inner : members.slice(0, 10);
+  show.forEach((m, i) => {
+    const pk = m.pubkey.slice(0, 8) + '...' + m.pubkey.slice(-6);
+    const roleCls = 'role-' + m.classification;
+    html += '<div class="member">';
+    html += '<span class="rank">' + (i + 1) + '</span>';
+    html += '<span class="pk">' + pk + '</span>';
+    html += '<span class="role-badge ' + roleCls + '">' + m.classification + '</span>';
+    html += '<span class="score" style="color:' + scoreColor(m.trust_score) + '">' + m.trust_score + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  if (metrics.role_counts) {
+    html += '<div style="margin-top:0.6rem;font-size:0.75rem;color:var(--muted)">';
+    html += Object.entries(metrics.role_counts).map(([r,c]) => r + ': ' + c).join(' · ');
+    html += '</div>';
+  }
+
+  $('#circleContent').innerHTML = html;
+}
+
+function stat(num, label) {
+  return '<div class="circle-stat"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
+}
+</script>
+</body>
+</html>`

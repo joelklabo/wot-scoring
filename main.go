@@ -1890,6 +1890,7 @@ footer a{color:#7c3aed}
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Base URL:</strong> <code style="color:#7c3aed">https://wot.klabo.world</code></p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>OpenAPI Spec:</strong> <a href="/openapi.json" style="color:#7c3aed">GET /openapi.json</a> — machine-readable API specification</p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>API Explorer:</strong> <a href="/swagger" style="color:#7c3aed">Swagger UI</a> — interactive API testing in your browser</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Interactive Demo:</strong> <a href="/demo" style="color:#7c3aed">WoT Explorer</a> — visual trust dashboard for any Nostr pubkey</p>
 </div>
 
 <div class="nav">
@@ -3273,6 +3274,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">WS</span><span class="path">/ws/scores</span><span class="desc">— Real-time score streaming via WebSocket (subscribe to pubkey updates)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/demo</span><span class="desc">— Visual trust dashboard: explore any pubkey's WoT profile</span></div>
 </div>
 
 <div class="nip85-kinds" style="margin-top:2rem">
@@ -3290,6 +3292,7 @@ footer a:hover{text-decoration:underline}
 
 <footer>
 <span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
+<span><a href="/demo">Demo</a></span>
 <span><a href="/docs">API Docs</a></span>
 <span><a href="/swagger">API Explorer</a></span>
 <span><a href="/openapi.json">OpenAPI Spec</a></span>
@@ -3845,6 +3848,7 @@ func main() {
 	http.HandleFunc("/network-health", handleNetworkHealth)
 	http.HandleFunc("/compare-providers", handleCompareProviders)
 	http.HandleFunc("/trust-circle", handleTrustCircle)
+	http.HandleFunc("/demo", handleDemo)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
