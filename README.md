@@ -289,6 +289,66 @@ Response:
 
 **Algorithm:** For each account you follow, find who *they* follow. Count how many of your follows also follow each candidate. Exclude accounts you already follow. Rank by 60% mutual ratio + 40% WoT score. Minimum 2 mutual connections required. Max 50 results.
 
+## Graph Explorer
+
+Two modes for exploring trust connections in the follow graph:
+
+### Trust Path Finder
+
+Find the shortest connection between any two pubkeys through the follow graph:
+
+```
+GET /graph?from=<hex|npub>&to=<hex|npub>
+```
+
+Response:
+
+```json
+{
+  "from": "32e1827...",
+  "to": "fa984bd...",
+  "found": true,
+  "path": [
+    {"pubkey": "32e1827...", "wot_score": 92},
+    {"pubkey": "82341f...", "wot_score": 78},
+    {"pubkey": "fa984bd...", "wot_score": 65}
+  ],
+  "hops": 2,
+  "graph_size": 51446
+}
+```
+
+BFS over follow edges, max depth 6. Each node in the path includes its WoT score.
+
+### Neighborhood Graph
+
+Get the local follow network around a pubkey — who they follow, who follows them, and mutual connections:
+
+```
+GET /graph?pubkey=<hex|npub>&depth=1&limit=50
+```
+
+Response:
+
+```json
+{
+  "pubkey": "32e1827...",
+  "wot_score": 92,
+  "follows_count": 942,
+  "followers_count": 12847,
+  "mutual_count": 15,
+  "neighbors": [
+    {"pubkey": "82341f...", "wot_score": 78, "relation": "mutual"},
+    {"pubkey": "fa984bd...", "wot_score": 65, "relation": "follows"},
+    {"pubkey": "abc123...", "wot_score": 45, "relation": "follower"}
+  ],
+  "depth": 1,
+  "graph_size": 51446
+}
+```
+
+Relations: `mutual` (both follow each other), `follows` (you follow them), `follower` (they follow you), `extended` (depth=2, friends-of-friends). Depth 1 or 2, max 200 results, sorted by WoT score.
+
 ## Batch Scoring
 
 Score up to 100 pubkeys in a single request:

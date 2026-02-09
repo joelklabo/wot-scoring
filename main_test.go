@@ -404,3 +404,185 @@ func TestHandleRecommendNoFollows(t *testing.T) {
 		t.Errorf("expected error message for nonexistent pubkey, got %v", resp["error"])
 	}
 }
+
+func TestHandleGraphPath(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	// alice -> bob -> carol -> dave
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("bob", "carol")
+	graph.AddFollow("carol", "dave")
+	// Also add a longer path: alice -> eve -> frank -> dave
+	graph.AddFollow("alice", "eve")
+	graph.AddFollow("eve", "frank")
+	graph.AddFollow("frank", "dave")
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/graph?from=alice&to=dave", nil)
+	w := httptest.NewRecorder()
+	handleGraph(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if resp["found"] != true {
+		t.Fatal("expected path to be found")
+	}
+
+	// BFS should find the 3-hop path: alice -> bob -> carol -> dave
+	hops := resp["hops"].(float64)
+	if hops != 3 {
+		t.Errorf("expected 3 hops, got %v", hops)
+	}
+
+	path := resp["path"].([]interface{})
+	if len(path) != 4 {
+		t.Fatalf("expected path length 4, got %d", len(path))
+	}
+	if path[0].(map[string]interface{})["pubkey"] != "alice" {
+		t.Error("expected path to start with alice")
+	}
+	if path[3].(map[string]interface{})["pubkey"] != "dave" {
+		t.Error("expected path to end with dave")
+	}
+}
+
+func TestHandleGraphPathNotFound(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("carol", "dave") // disconnected from alice
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/graph?from=alice&to=dave", nil)
+	w := httptest.NewRecorder()
+	handleGraph(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["found"] != false {
+		t.Error("expected path not to be found between disconnected nodes")
+	}
+}
+
+func TestHandleGraphNeighborhood(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.AddFollow("alice", "bob")
+	graph.AddFollow("alice", "carol")
+	graph.AddFollow("bob", "alice") // mutual
+	graph.AddFollow("dave", "alice") // follower only
+	graph.ComputePageRank(20, 0.85)
+
+	req := httptest.NewRequest(http.MethodGet, "/graph?pubkey=alice", nil)
+	w := httptest.NewRecorder()
+	handleGraph(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if resp["pubkey"] != "alice" {
+		t.Errorf("expected pubkey alice, got %v", resp["pubkey"])
+	}
+	if resp["follows_count"].(float64) != 2 {
+		t.Errorf("expected 2 follows, got %v", resp["follows_count"])
+	}
+	if resp["followers_count"].(float64) != 2 {
+		t.Errorf("expected 2 followers, got %v", resp["followers_count"])
+	}
+
+	neighbors := resp["neighbors"].([]interface{})
+	if len(neighbors) != 3 { // bob (mutual), carol (follows), dave (follower)
+		t.Fatalf("expected 3 neighbors, got %d", len(neighbors))
+	}
+
+	// Check relation types
+	relations := make(map[string]string)
+	for _, n := range neighbors {
+		entry := n.(map[string]interface{})
+		relations[entry["pubkey"].(string)] = entry["relation"].(string)
+	}
+	if relations["bob"] != "mutual" {
+		t.Errorf("expected bob to be mutual, got %s", relations["bob"])
+	}
+	if relations["carol"] != "follows" {
+		t.Errorf("expected carol to be follows, got %s", relations["carol"])
+	}
+	if relations["dave"] != "follower" {
+		t.Errorf("expected dave to be follower, got %s", relations["dave"])
+	}
+}
+
+func TestHandleGraphMissingParams(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/graph", nil)
+	w := httptest.NewRecorder()
+	handleGraph(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleGraphSamePubkey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/graph?from=alice&to=alice", nil)
+	w := httptest.NewRecorder()
+	handleGraph(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for same pubkey, got %d", w.Code)
+	}
+}
+
+func TestBfsPath(t *testing.T) {
+	oldGraph := graph
+	defer func() { graph = oldGraph }()
+
+	graph = NewGraph()
+	graph.AddFollow("a", "b")
+	graph.AddFollow("b", "c")
+	graph.AddFollow("c", "d")
+
+	// Direct path: a -> b -> c -> d
+	path, found := bfsPath("a", "d", 6)
+	if !found {
+		t.Fatal("expected path a->d to be found")
+	}
+	if len(path) != 4 {
+		t.Fatalf("expected path length 4, got %d", len(path))
+	}
+	if path[0] != "a" || path[3] != "d" {
+		t.Errorf("expected path from a to d, got %v", path)
+	}
+
+	// No reverse path (follows are directional)
+	_, found = bfsPath("d", "a", 6)
+	if found {
+		t.Error("expected no path from d to a (follows are directional)")
+	}
+
+	// Max depth limit
+	_, found = bfsPath("a", "d", 2)
+	if found {
+		t.Error("expected path not found within depth 2")
+	}
+}

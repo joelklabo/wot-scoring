@@ -710,6 +710,257 @@ func handleRecommend(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleGraph serves two modes:
+// Path mode: GET /graph?from=<pubkey>&to=<pubkey> — BFS shortest trust path
+// Neighborhood mode: GET /graph?pubkey=<pubkey>&depth=1 — local graph around a pubkey
+func handleGraph(w http.ResponseWriter, r *http.Request) {
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	pubkey := r.URL.Query().Get("pubkey")
+
+	// Path mode: find shortest path between two pubkeys
+	if from != "" && to != "" {
+		fromHex, err := resolvePubkey(from)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"invalid from pubkey: %s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		toHex, err := resolvePubkey(to)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"invalid to pubkey: %s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		if fromHex == toHex {
+			http.Error(w, `{"error":"from and to are the same pubkey"}`, http.StatusBadRequest)
+			return
+		}
+
+		path, found := bfsPath(fromHex, toHex, 6)
+		stats := graph.Stats()
+
+		if !found {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"from":       fromHex,
+				"to":         toHex,
+				"found":      false,
+				"path":       []string{},
+				"hops":       0,
+				"graph_size": stats.Nodes,
+			})
+			return
+		}
+
+		// Annotate each node in the path with WoT score
+		type pathNode struct {
+			Pubkey   string `json:"pubkey"`
+			WotScore int    `json:"wot_score"`
+		}
+		nodes := make([]pathNode, len(path))
+		for i, pk := range path {
+			rawScore, _ := graph.GetScore(pk)
+			nodes[i] = pathNode{
+				Pubkey:   pk,
+				WotScore: normalizeScore(rawScore, stats.Nodes),
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"from":       fromHex,
+			"to":         toHex,
+			"found":      true,
+			"path":       nodes,
+			"hops":       len(path) - 1,
+			"graph_size": stats.Nodes,
+		})
+		return
+	}
+
+	// Neighborhood mode: local graph around a pubkey
+	if pubkey != "" {
+		pk, err := resolvePubkey(pubkey)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+
+		depthStr := r.URL.Query().Get("depth")
+		depth := 1
+		if depthStr != "" {
+			if n, err := fmt.Sscanf(depthStr, "%d", &depth); n != 1 || err != nil || depth < 1 {
+				depth = 1
+			}
+			if depth > 2 {
+				depth = 2 // cap at 2 to prevent huge responses
+			}
+		}
+
+		limitStr := r.URL.Query().Get("limit")
+		limit := 50
+		if limitStr != "" {
+			if n, err := fmt.Sscanf(limitStr, "%d", &limit); n != 1 || err != nil || limit < 1 {
+				limit = 50
+			}
+			if limit > 200 {
+				limit = 200
+			}
+		}
+
+		stats := graph.Stats()
+		rawScore, _ := graph.GetScore(pk)
+
+		type neighborNode struct {
+			Pubkey   string `json:"pubkey"`
+			WotScore int    `json:"wot_score"`
+			Relation string `json:"relation"` // "follows", "follower", "mutual"
+		}
+
+		follows := graph.GetFollows(pk)
+		followers := graph.GetFollowers(pk)
+
+		followSet := make(map[string]bool, len(follows))
+		for _, f := range follows {
+			followSet[f] = true
+		}
+		followerSet := make(map[string]bool, len(followers))
+		for _, f := range followers {
+			followerSet[f] = true
+		}
+
+		// Collect unique neighbors with relation type
+		seen := make(map[string]bool)
+		neighbors := make([]neighborNode, 0)
+
+		for _, f := range follows {
+			if seen[f] || f == pk {
+				continue
+			}
+			seen[f] = true
+			relation := "follows"
+			if followerSet[f] {
+				relation = "mutual"
+			}
+			raw, _ := graph.GetScore(f)
+			neighbors = append(neighbors, neighborNode{
+				Pubkey:   f,
+				WotScore: normalizeScore(raw, stats.Nodes),
+				Relation: relation,
+			})
+		}
+		for _, f := range followers {
+			if seen[f] || f == pk {
+				continue
+			}
+			seen[f] = true
+			raw, _ := graph.GetScore(f)
+			neighbors = append(neighbors, neighborNode{
+				Pubkey:   f,
+				WotScore: normalizeScore(raw, stats.Nodes),
+				Relation: "follower",
+			})
+		}
+
+		// If depth=2, also include follows-of-follows (trimmed)
+		if depth == 2 {
+			for _, f := range follows {
+				fof := graph.GetFollows(f)
+				for _, ff := range fof {
+					if seen[ff] || ff == pk {
+						continue
+					}
+					if len(neighbors) >= limit {
+						break
+					}
+					seen[ff] = true
+					raw, _ := graph.GetScore(ff)
+					neighbors = append(neighbors, neighborNode{
+						Pubkey:   ff,
+						WotScore: normalizeScore(raw, stats.Nodes),
+						Relation: "extended",
+					})
+				}
+				if len(neighbors) >= limit {
+					break
+				}
+			}
+		}
+
+		// Sort by WoT score descending, then trim
+		sort.Slice(neighbors, func(i, j int) bool {
+			return neighbors[i].WotScore > neighbors[j].WotScore
+		})
+		if len(neighbors) > limit {
+			neighbors = neighbors[:limit]
+		}
+
+		// Count relation types
+		mutualCount := 0
+		for _, n := range neighbors {
+			if n.Relation == "mutual" {
+				mutualCount++
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pubkey":          pk,
+			"wot_score":       normalizeScore(rawScore, stats.Nodes),
+			"follows_count":   len(follows),
+			"followers_count": len(followers),
+			"mutual_count":    mutualCount,
+			"neighbors":       neighbors,
+			"depth":           depth,
+			"graph_size":      stats.Nodes,
+		})
+		return
+	}
+
+	http.Error(w, `{"error":"provide either ?from=&to= (path mode) or ?pubkey= (neighborhood mode)"}`, http.StatusBadRequest)
+}
+
+// bfsPath finds the shortest path from source to target through the follow graph.
+// maxDepth limits search depth to prevent runaway BFS on large graphs.
+func bfsPath(source, target string, maxDepth int) ([]string, bool) {
+	if source == target {
+		return []string{source}, true
+	}
+
+	type bfsNode struct {
+		pubkey string
+		path   []string
+	}
+
+	visited := make(map[string]bool)
+	visited[source] = true
+	queue := []bfsNode{{pubkey: source, path: []string{source}}}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if len(current.path) > maxDepth {
+			break
+		}
+
+		follows := graph.GetFollows(current.pubkey)
+		for _, next := range follows {
+			if next == target {
+				return append(current.path, target), true
+			}
+			if !visited[next] {
+				visited[next] = true
+				newPath := make([]string, len(current.path)+1)
+				copy(newPath, current.path)
+				newPath[len(current.path)] = next
+				queue = append(queue, bfsNode{pubkey: next, path: newPath})
+			}
+		}
+	}
+
+	return nil, false
+}
+
 type TopEntry struct {
 	Pubkey    string  `json:"pubkey"`
 	Score     float64 `json:"score"`
@@ -1328,6 +1579,8 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">POST</span><span class="path">/batch</span><span class="desc">— Score multiple pubkeys at once</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/similar?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Find similar pubkeys by follow overlap</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/recommend?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Follow recommendations (friends-of-friends)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/graph?from=&lt;hex&gt;&amp;to=&lt;hex&gt;</span><span class="desc">— Trust path finder (shortest connection)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/graph?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Neighborhood graph (local follow network)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
@@ -1491,6 +1744,7 @@ func main() {
 	http.HandleFunc("/personalized", handlePersonalized)
 	http.HandleFunc("/similar", handleSimilar)
 	http.HandleFunc("/recommend", handleRecommend)
+	http.HandleFunc("/graph", handleGraph)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
 	http.HandleFunc("/export", handleExport)
@@ -1524,6 +1778,8 @@ func main() {
 POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["hex1","hex2",...]})
 /similar?pubkey=<hex> — Find similar pubkeys by follow-graph overlap (Jaccard + WoT weighted)
 /recommend?pubkey=<hex> — Follow recommendations (friends-of-friends who you don't yet follow)
+/graph?from=<hex>&to=<hex> — Trust path finder (shortest connection between two pubkeys)
+/graph?pubkey=<hex>&depth=1 — Neighborhood graph (local follow network around a pubkey)
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)
