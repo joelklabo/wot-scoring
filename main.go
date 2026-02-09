@@ -265,14 +265,31 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+type TopEntry struct {
+	Pubkey    string  `json:"pubkey"`
+	Score     float64 `json:"score"`
+	Rank      int     `json:"rank"`
+	NormScore int     `json:"norm_score"`
+	Followers int     `json:"followers"`
+}
+
 func handleTop(w http.ResponseWriter, r *http.Request) {
 	entries := graph.TopN(50)
-	for i := range entries {
-		entries[i].Rank = i + 1
+	stats := graph.Stats()
+	result := make([]TopEntry, len(entries))
+	for i, e := range entries {
+		m := meta.Get(e.Pubkey)
+		result[i] = TopEntry{
+			Pubkey:    e.Pubkey,
+			Score:     e.Score,
+			Rank:      i + 1,
+			NormScore: normalizeScore(e.Score, stats.Nodes),
+			Followers: m.Followers,
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(entries)
+	json.NewEncoder(w).Encode(result)
 }
 
 func handleStats(w http.ResponseWriter, r *http.Request) {
@@ -902,7 +919,7 @@ fetch("/top").then(r=>r.json()).then(data=>{
 const tbody=document.getElementById("lb-body");
 if(!data||!data.length){tbody.innerHTML='<tr><td colspan="4" style="color:#555">No data yet</td></tr>';return}
 const top10=data.slice(0,10);
-tbody.innerHTML=top10.map((e,i)=>'<tr><td class="lb-rank">'+(i+1)+'</td><td class="lb-pubkey">'+e.pubkey.slice(0,12)+'...'+e.pubkey.slice(-8)+'</td><td class="lb-score">'+(e.rank||"—")+'</td><td class="lb-followers">—</td></tr>').join("");
+tbody.innerHTML=top10.map((e,i)=>'<tr><td class="lb-rank">'+(i+1)+'</td><td class="lb-pubkey">'+e.pubkey.slice(0,12)+'...'+e.pubkey.slice(-8)+'</td><td class="lb-score">'+(e.norm_score||0)+'/100</td><td class="lb-followers">'+fmt(e.followers||0)+'</td></tr>').join("");
 }).catch(()=>{document.getElementById("lb-body").innerHTML='<tr><td colspan="4" style="color:#555">Failed to load</td></tr>'});
 </script>
 </body>
