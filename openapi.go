@@ -43,7 +43,8 @@ const openAPISpec = `{
     {"name": "Engagement", "description": "Event and external identifier scoring"},
     {"name": "Ranking", "description": "Leaderboards, statistics, and exports"},
     {"name": "Infrastructure", "description": "Health, providers, relay trust, communities, publishing"},
-    {"name": "Visualization", "description": "D3.js-compatible graph data and trust comparison"}
+    {"name": "Visualization", "description": "D3.js-compatible graph data and trust comparison"},
+    {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"}
   ],
   "paths": {
     "/score": {
@@ -526,6 +527,40 @@ const openAPISpec = `{
           "200": {"description": "Mute analysis with WoT scores and community signal"},
           "400": {"description": "Missing or invalid pubkey/target"},
           "402": {"description": "L402 payment required (2 sats)"}
+        }
+      }
+    },
+    "/verify": {
+      "post": {
+        "tags": ["Verification"],
+        "operationId": "verifyAssertion",
+        "summary": "Verify a NIP-85 assertion from any provider",
+        "description": "Accepts a NIP-85 kind 30382 event (JSON) and cross-checks it against our own graph data. Verifies cryptographic signature, then compares claimed rank and follower count against our observations. Returns a verdict: consistent (claims match), divergent (claims don't match), unverifiable (no verifiable claims), or invalid (bad signature/structure). Enables multi-provider trust verification.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "A Nostr event (kind 30382) with id, pubkey, sig, tags, etc.",
+                "properties": {
+                  "id": {"type": "string"},
+                  "pubkey": {"type": "string"},
+                  "created_at": {"type": "integer"},
+                  "kind": {"type": "integer", "enum": [30382]},
+                  "tags": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+                  "content": {"type": "string"},
+                  "sig": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Verification result with per-field checks and overall verdict"},
+          "400": {"description": "Invalid JSON or wrong event kind"},
+          "402": {"description": "L402 payment required (2 sats)"},
+          "405": {"description": "Method not allowed (POST required)"}
         }
       }
     },

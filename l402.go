@@ -54,6 +54,7 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 			"/spam/batch":    10,
 			"/weboftrust":    3,
 			"/blocked":       2,
+			"/verify":        2,
 		},
 		freeUsage:  make(map[string]*dailyUsage),
 		paidHashes: make(map[string]bool),

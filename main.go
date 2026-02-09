@@ -2219,6 +2219,40 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== VERIFICATION ===== -->
+<h2 id="verification">Verification</h2>
+<p class="section-intro">Cross-provider NIP-85 assertion verification.</p>
+
+<div class="endpoint-card" id="ep-verify">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/verify</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Verify a NIP-85 kind 30382 assertion from any provider against our graph data. Checks cryptographic signature, then cross-references claimed rank and follower count. Returns verdict: consistent, divergent, unverifiable, or invalid.</div>
+<div class="params">
+<div class="params-title">Request Body (JSON)</div>
+<div class="param"><span class="param-name">event</span><span class="param-type">Nostr Event</span><span class="param-desc">A kind 30382 event with id, pubkey, created_at, kind, tags, content, sig <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "valid": true,
+  "verdict": "consistent",
+  "kind": 30382,
+  "provider_pubkey": "abc123...",
+  "subject_pubkey": "def456...",
+  "checks": [
+    {"field": "rank", "claimed": 42, "observed": 45, "status": "close"},
+    {"field": "followers", "claimed": 150, "observed": 150, "status": "match"}
+  ],
+  "match_count": 2,
+  "total_checks": 2,
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2694,6 +2728,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">POST</span><span class="path">/spam/batch</span><span class="desc">— Bulk spam check (up to 100 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/weboftrust?pubkey=&lt;hex|npub&gt;</span><span class="desc">— D3.js-compatible trust graph visualization</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/timeline?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Historical trust growth timeline</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/verify</span><span class="desc">— Cross-provider NIP-85 assertion verification</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
@@ -2703,7 +2738,7 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /weboftrust (3 sats)</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify, /weboftrust (3 sats)</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
@@ -3249,6 +3284,7 @@ func main() {
 	http.HandleFunc("/spam/batch", handleSpamBatch)
 	http.HandleFunc("/weboftrust", handleWebOfTrust)
 	http.HandleFunc("/blocked", handleBlocked)
+	http.HandleFunc("/verify", handleVerify)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

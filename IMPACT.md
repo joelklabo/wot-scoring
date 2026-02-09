@@ -14,11 +14,11 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 33 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 34 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 33 endpoints serve live data. 252 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 34 endpoints serve live data. 267 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -51,12 +51,14 @@ Beyond standard PageRank scoring, we implemented:
 - **Batch spam filtering** (`POST /spam/batch`) — check up to 100 pubkeys for spam in one request, with summary counts (likely_human, suspicious, likely_spam, errors). Enables clients to filter entire contact lists or relay event feeds for spam without individual queries.
 - **Trust graph visualization** (`/weboftrust`) — returns a D3.js-compatible force-directed graph (nodes + links) centered on a pubkey. Nodes are colored by relationship type (follow, follower, mutual) and sized by WoT score. Clients can render interactive trust network maps. The landing page includes a built-in SVG visualization with zoom and limit controls.
 - **Mute list analysis** (`/blocked`) — NIP-51 kind 10000 mute list integration providing two modes: (1) who a pubkey has muted, and (2) who has muted a target pubkey. The reverse lookup produces a "community moderation signal" — when multiple high-WoT users have independently blocked the same pubkey, it's a strong negative trust indicator. Signals range from "no_data" through "weak_negative", "moderate_negative", to "strong_negative". Each entry includes WoT scores for context. This bridges NIP-51 (mute lists) with NIP-85 (trust assertions), adding negative trust signals that complement the positive signals from follows and engagement.
+- **Cross-provider assertion verification** (`POST /verify`) — accepts any NIP-85 kind 30382 event as JSON, verifies its cryptographic signature and event ID, then cross-references claimed rank and follower count against our own graph data. Returns a verdict: "consistent" (claims match within tolerance), "divergent" (significant disagreement), "unverifiable" (no verifiable claims), or "invalid" (bad signature/structure). Each field check includes both the claimed and observed values. This is the first known NIP-85 cross-provider verification endpoint — enabling clients to assess whether multiple independent providers agree on a pubkey's trust profile.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
 
 - **Publishes** all five NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net) and NIP-85 dedicated relays (nip85.nostr1.com, nip85.brainstorm.world)
 - **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
+- **Verifies** kind 30382 assertions from ANY provider via `/verify` — cryptographic signature validation + claim cross-referencing against our own graph
 - **Consumes** kind 10000 mute lists (NIP-51) from relays, building a reverse index for community moderation analysis
 - **NIP-89 handler** published on startup for automatic client discovery
 - **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)

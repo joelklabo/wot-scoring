@@ -58,6 +58,7 @@ POST /spam/batch             — Bulk spam check up to 100 pubkeys with summary 
 GET /weboftrust?pubkey=<hex|npub> — D3.js-compatible trust graph: nodes + links for force-directed visualization
 GET /blocked?pubkey=<hex|npub> — Who has this pubkey muted (their NIP-51 mute list)
 GET /blocked?target=<hex|npub> — Who has muted this target (reverse lookup + community signal)
+POST /verify                 — Verify a NIP-85 kind 30382 assertion from any provider (cross-check signature + claims)
 GET /providers               — External NIP-85 assertion providers and assertion counts
 GET /top                     — Top 50 scored pubkeys
 GET /export                  — All scores as JSON
