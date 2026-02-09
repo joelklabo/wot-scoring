@@ -99,6 +99,18 @@ func (g *Graph) GetScore(pubkey string) (float64, bool) {
 	return s, ok
 }
 
+func (g *Graph) GetFollows(pubkey string) []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.follows[pubkey]
+}
+
+func (g *Graph) GetFollowers(pubkey string) []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.followers[pubkey]
+}
+
 func (g *Graph) TopN(n int) []ScoreEntry {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -273,6 +285,174 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func handleBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Pubkeys []string `json:"pubkeys"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Pubkeys) == 0 {
+		http.Error(w, `{"error":"pubkeys array required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Pubkeys) > 100 {
+		http.Error(w, `{"error":"max 100 pubkeys per request"}`, http.StatusBadRequest)
+		return
+	}
+
+	stats := graph.Stats()
+	results := make([]map[string]interface{}, 0, len(req.Pubkeys))
+	for _, raw := range req.Pubkeys {
+		pubkey, err := resolvePubkey(raw)
+		if err != nil {
+			results = append(results, map[string]interface{}{
+				"pubkey": raw,
+				"error":  err.Error(),
+			})
+			continue
+		}
+
+		score, ok := graph.GetScore(pubkey)
+		internalScore := normalizeScore(score, stats.Nodes)
+		m := meta.Get(pubkey)
+		extAssertions := externalAssertions.GetForSubject(pubkey)
+		compositeScore, _ := CompositeScore(internalScore, extAssertions, externalAssertions)
+
+		entry := map[string]interface{}{
+			"pubkey":    pubkey,
+			"score":     internalScore,
+			"found":     ok,
+			"followers": m.Followers,
+		}
+		if len(extAssertions) > 0 {
+			entry["composite_score"] = compositeScore
+		}
+		results = append(results, entry)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results":    results,
+		"graph_size": stats.Nodes,
+	})
+}
+
+func handlePersonalized(w http.ResponseWriter, r *http.Request) {
+	viewerRaw := r.URL.Query().Get("viewer")
+	targetRaw := r.URL.Query().Get("target")
+	if viewerRaw == "" || targetRaw == "" {
+		http.Error(w, `{"error":"viewer and target parameters required"}`, http.StatusBadRequest)
+		return
+	}
+
+	viewer, err := resolvePubkey(viewerRaw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"invalid viewer: %s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	target, err := resolvePubkey(targetRaw)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"invalid target: %s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	stats := graph.Stats()
+	viewerFollows := graph.GetFollows(viewer)
+	targetFollows := graph.GetFollows(target)
+	targetFollowers := graph.GetFollowers(target)
+
+	// Check direct follow relationship
+	viewerFollowsTarget := false
+	targetFollowsViewer := false
+	viewerFollowSet := make(map[string]bool, len(viewerFollows))
+	for _, f := range viewerFollows {
+		viewerFollowSet[f] = true
+		if f == target {
+			viewerFollowsTarget = true
+		}
+	}
+	for _, f := range targetFollows {
+		if f == viewer {
+			targetFollowsViewer = true
+			break
+		}
+	}
+
+	// Count shared follows (people both viewer and target follow)
+	targetFollowSet := make(map[string]bool, len(targetFollows))
+	for _, f := range targetFollows {
+		targetFollowSet[f] = true
+	}
+	sharedFollows := 0
+	for f := range viewerFollowSet {
+		if targetFollowSet[f] {
+			sharedFollows++
+		}
+	}
+
+	// Count how many of the viewer's follows also follow the target
+	trustedFollowers := 0
+	trustedFollowerList := make([]string, 0)
+	for _, follower := range targetFollowers {
+		if viewerFollowSet[follower] {
+			trustedFollowers++
+			if len(trustedFollowerList) < 10 {
+				trustedFollowerList = append(trustedFollowerList, follower)
+			}
+		}
+	}
+
+	// Global score
+	rawScore, found := graph.GetScore(target)
+	globalScore := normalizeScore(rawScore, stats.Nodes)
+
+	// Personalized score: blend global score with social proximity signals
+	proximityScore := 0.0
+	if viewerFollowsTarget {
+		proximityScore += 40.0 // Direct follow = strong signal
+	}
+	if targetFollowsViewer {
+		proximityScore += 10.0 // Mutual = extra signal
+	}
+	if len(viewerFollows) > 0 {
+		// What fraction of your follows also follow this person?
+		trustedRatio := float64(trustedFollowers) / float64(len(viewerFollows))
+		proximityScore += trustedRatio * 50.0 // Up to 50 points from trusted followers
+	}
+	if proximityScore > 100 {
+		proximityScore = 100
+	}
+
+	// Blend: 50% global PageRank + 50% social proximity
+	personalizedScore := int(float64(globalScore)*0.5 + proximityScore*0.5)
+	if personalizedScore > 100 {
+		personalizedScore = 100
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"viewer":              viewer,
+		"target":              target,
+		"personalized_score":  personalizedScore,
+		"global_score":        globalScore,
+		"found":               found,
+		"viewer_follows_target": viewerFollowsTarget,
+		"target_follows_viewer": targetFollowsViewer,
+		"mutual_follow":       viewerFollowsTarget && targetFollowsViewer,
+		"trusted_followers":   trustedFollowers,
+		"trusted_follower_sample": trustedFollowerList,
+		"shared_follows":      sharedFollows,
+		"graph_size":          stats.Nodes,
+	})
 }
 
 type TopEntry struct {
@@ -889,6 +1069,8 @@ footer a:hover{text-decoration:underline}
 <div class="endpoints">
 <h2>API Endpoints</h2>
 <div class="endpoint"><span class="method">GET</span><span class="path">/score?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Trust score + metadata</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/personalized?viewer=&lt;hex&gt;&amp;target=&lt;hex&gt;</span><span class="desc">— Personalized trust score</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/batch</span><span class="desc">— Score multiple pubkeys at once</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/metadata?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Full NIP-85 metadata</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/event?id=&lt;hex&gt;</span><span class="desc">— Event engagement (kind 30383)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/external?id=&lt;ident&gt;</span><span class="desc">— Identifier score (kind 30385)</span></div>
@@ -1048,6 +1230,8 @@ func main() {
 		})
 	})
 	http.HandleFunc("/score", handleScore)
+	http.HandleFunc("/batch", handleBatch)
+	http.HandleFunc("/personalized", handlePersonalized)
 	http.HandleFunc("/top", handleTop)
 	http.HandleFunc("/stats", handleStats)
 	http.HandleFunc("/export", handleExport)
@@ -1077,6 +1261,8 @@ func main() {
 			"name":        "WoT Scoring Service",
 			"description": "NIP-85 Trusted Assertions provider. PageRank trust scoring over the Nostr follow graph with full metadata collection.",
 			"endpoints": `/score?pubkey=<hex> — Trust score for a pubkey (kind 30382), with composite scoring from external providers
+/personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
+POST /batch — Score multiple pubkeys in one request (JSON body: {"pubkeys":["hex1","hex2",...]})
 /metadata?pubkey=<hex> — Full NIP-85 metadata (followers, posts, reactions, zaps)
 /event?id=<hex> — Event engagement score (kind 30383)
 /external?id=<identifier> — External identifier score (kind 30385, NIP-73)
