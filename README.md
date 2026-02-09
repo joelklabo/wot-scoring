@@ -30,6 +30,8 @@ Live at https://wot.klabo.world — try any endpoint below.
 GET /                        — Service info and endpoint list
 GET /health                  — Health check (status, graph size, uptime)
 GET /score?pubkey=<hex>      — Trust score for a pubkey (kind 30382) + composite from external providers
+GET /personalized?viewer=<hex>&target=<hex> — Personalized trust score relative to viewer's follow graph
+POST /batch                  — Score up to 100 pubkeys in one request (JSON: {"pubkeys":[...]})
 GET /metadata?pubkey=<hex>   — Full NIP-85 metadata (followers, posts, reactions, zaps)
 GET /event?id=<hex>          — Event engagement score (kind 30383)
 GET /external?id=<ident>     — External identifier score (kind 30385, NIP-73)
@@ -202,6 +204,43 @@ composite = (internal_score × 0.70) + (external_avg × 0.30)
 This means clients can ask our service for a trust score that blends multiple independent WoT engines — true NIP-85 interoperability.
 
 The `/providers` endpoint lists all discovered external NIP-85 assertion providers and their assertion counts.
+
+## Personalized Trust Scoring
+
+The `/personalized` endpoint scores a target pubkey relative to a viewer's follow graph — the same query Vertex claims NIP-85 can't serve. Our server handles the computation:
+
+```
+GET /personalized?viewer=<hex>&target=<hex>
+```
+
+Response:
+
+```json
+{
+  "personalized_score": 55,
+  "global_score": 21,
+  "viewer_follows_target": true,
+  "target_follows_viewer": true,
+  "mutual_follow": true,
+  "trusted_followers": 748,
+  "shared_follows": 293,
+  "trusted_follower_sample": ["32e1827...", "fa984bd..."]
+}
+```
+
+**Formula:** 50% global PageRank + 50% social proximity (direct follow: +40, mutual: +10, trusted follower ratio: up to +50).
+
+## Batch Scoring
+
+Score up to 100 pubkeys in a single request:
+
+```
+POST /batch
+Content-Type: application/json
+{"pubkeys": ["hex1", "hex2", "npub1..."]}
+```
+
+Returns score, composite score, and follower count per pubkey. Supports both hex and npub formats.
 
 ## NIP-89 Handler Announcement
 
