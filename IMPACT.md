@@ -6,18 +6,19 @@ Nostr has no built-in way to assess how trustworthy a pubkey is. Every client sh
 
 ## What We Built
 
-WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known implementation that publishes all four assertion kinds:
+WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known implementation that publishes all five assertion kinds:
 
 - **Kind 30382 — User Assertions.** PageRank trust scores computed over 51,000+ nodes and 620,000+ edges from the Nostr follow graph. Each event includes 12 metadata tags (rank, followers, posts, reactions, zaps).
 - **Kind 30383 — Event Assertions.** Per-event engagement scores (comments, reposts, reactions, zaps) for notes by top-ranked pubkeys.
 - **Kind 30384 — Addressable Event Assertions.** Engagement scoring for long-form articles (kind 30023) and live activities (kind 30311).
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
+- **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 21 API endpoints, auto re-crawls every 6 hours, publishes to 3 relays.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 25+ API endpoints, auto re-crawls every 6 hours, publishes to 3 relays. L402 Lightning paywall deployed to production.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 21 endpoints serve live data. 147 automated tests pass in CI (including L402 paywall tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 25+ endpoints serve live data. 160 automated tests pass in CI (including L402 paywall, community detection, and authorization tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
 Interactive UI features:
 - **Score Lookup** — real-time trust score search with live debounced queries
@@ -38,10 +39,12 @@ Beyond standard PageRank scoring, we implemented:
 - **Similar pubkey discovery** (`/similar`) — Jaccard similarity (70%) + WoT score (30%) for finding pubkeys with overlapping follow graphs.
 - **Relay trust assessment** (`/relay`) — combines infrastructure trust data from trustedrelays.xyz with operator social reputation from PageRank (70/30 blend).
 - **Trust comparison** (`/compare`) — side-by-side comparison showing direct relationship, shared follows, Jaccard similarity, and trust path.
+- **Community detection** (`/communities`) — label propagation algorithm identifies trust communities within the follow graph, revealing organic clusters of related users.
+- **Authorization tracking** (`/authorized`) — consumes kind 10040 events from relays, showing which users have explicitly authorized specific NIP-85 scoring providers.
 
 ## Interoperability
 
-- **Publishes** all four NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net)
+- **Publishes** all five NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net) and NIP-85 dedicated relays (nip85.nostr1.com, nip85.brainstorm.world)
 - **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
 - **NIP-89 handler** published on startup for automatic client discovery
 - **Batch API** for clients that need to score many pubkeys at once (up to 100 per request)
@@ -67,7 +70,7 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 147 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, and API handlers
+- 160 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, and API handlers
 - This impact statement and technical architecture documented in the repository
 
 ## Business Model Sustainability
