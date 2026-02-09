@@ -1790,6 +1790,602 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+const docsPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Documentation — WoT Scoring</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a0a;color:#e0e0e0;line-height:1.6}
+.container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:2rem;color:#fff;margin-bottom:.25rem}
+h2{font-size:1.4rem;color:#fff;margin:2.5rem 0 1rem 0;padding-bottom:.5rem;border-bottom:1px solid #222}
+h3{font-size:1.1rem;color:#e0e0e0;margin:1.5rem 0 .5rem 0}
+.subtitle{color:#888;font-size:1.1rem;margin-bottom:1.5rem}
+a{color:#7c3aed;text-decoration:none}a:hover{text-decoration:underline}
+.nav{display:flex;gap:1rem;flex-wrap:wrap;margin:1.5rem 0;padding:1rem;background:#111;border:1px solid #222;border-radius:8px}
+.nav a{font-size:.85rem;color:#aaa;padding:.25rem .5rem;border-radius:4px}.nav a:hover{color:#fff;background:#1a1a2e;text-decoration:none}
+.endpoint-card{background:#111;border:1px solid #222;border-radius:8px;padding:1.25rem;margin-bottom:1rem}
+.endpoint-header{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.method{display:inline-block;padding:.2rem .6rem;border-radius:4px;font-weight:700;font-size:.8rem;font-family:monospace}
+.method-get{background:#16a34a22;color:#4ade80;border:1px solid #16a34a44}
+.method-post{background:#2563eb22;color:#60a5fa;border:1px solid #2563eb44}
+.path{font-family:monospace;font-size:1rem;color:#fff;font-weight:600}
+.price-tag{font-size:.75rem;padding:.15rem .5rem;border-radius:10px;background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed44}
+.desc{color:#999;font-size:.9rem;margin-top:.5rem}
+.params{margin-top:.75rem}
+.params-title{font-size:.8rem;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.param{display:flex;gap:.5rem;align-items:baseline;font-size:.85rem;padding:.2rem 0}
+.param-name{font-family:monospace;color:#7c3aed;font-weight:600;min-width:100px}
+.param-type{color:#666;font-size:.75rem;min-width:60px}
+.param-desc{color:#aaa}
+.param-req{color:#f59e0b;font-size:.7rem}
+.example{margin-top:.75rem}
+.example-title{font-size:.8rem;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.code-block{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:6px;padding:.75rem 1rem;font-family:monospace;font-size:.8rem;color:#ccc;overflow-x:auto;white-space:pre;position:relative}
+.try-btn{display:inline-block;margin-top:.5rem;padding:.4rem .8rem;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;transition:background .2s}
+.try-btn:hover{background:#6d28d9}
+.try-btn:disabled{background:#333;color:#666;cursor:not-allowed}
+.try-result{margin-top:.5rem;display:none}
+.try-result.active{display:block}
+.section-intro{color:#888;font-size:.9rem;margin-bottom:1rem}
+.free{color:#10b981;font-size:.75rem;padding:.15rem .5rem;border-radius:10px;background:#10b98122;border:1px solid #10b98144}
+.badge{display:inline-block;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:.15rem .5rem;font-size:.8rem;color:#7c3aed;margin-right:.5rem}
+.auth-box{background:#111;border:1px solid #222;border-radius:8px;padding:1.25rem;margin:1.5rem 0}
+.auth-box h3{margin-top:0}
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid #222;color:#555;font-size:.85rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+footer a{color:#7c3aed}
+@media(max-width:640px){.endpoint-header{flex-direction:column;align-items:flex-start}.param{flex-direction:column;gap:.1rem}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>WoT Scoring API</h1>
+<p class="subtitle">Complete reference for the Nostr Web of Trust scoring service</p>
+<span class="badge">NIP-85</span>
+<span class="badge">27 Endpoints</span>
+<span class="badge">L402 Lightning Paywall</span>
+<span class="badge">REST/JSON</span>
+
+<div class="auth-box">
+<h3>Authentication &amp; Pricing</h3>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0">All endpoints support <strong>CORS</strong> and accept <strong>hex pubkeys</strong>, <strong>npub</strong> (bech32), or <strong>NIP-05 identifiers</strong>.</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Free tier:</strong> 10 requests/day per IP on priced endpoints. Unpriced endpoints are unlimited.</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>L402 payment flow:</strong> Request → 402 response with Lightning invoice → Pay invoice → Retry with <code style="color:#7c3aed">X-Payment-Hash</code> header.</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Rate limit:</strong> 100 requests/min per IP.</p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Base URL:</strong> <code style="color:#7c3aed">https://wot.klabo.world</code></p>
+</div>
+
+<div class="nav">
+<strong style="color:#888;font-size:.85rem">Jump to:</strong>
+<a href="#scoring">Scoring</a>
+<a href="#personalized">Personalized</a>
+<a href="#graph">Graph</a>
+<a href="#identity">Identity</a>
+<a href="#temporal">Temporal</a>
+<a href="#moderation">Moderation</a>
+<a href="#engagement">Engagement</a>
+<a href="#ranking">Ranking</a>
+<a href="#infrastructure">Infrastructure</a>
+</div>
+
+<!-- ===== SCORING ===== -->
+<h2 id="scoring">Scoring</h2>
+<p class="section-intro">Core trust scoring powered by PageRank over the Nostr follow graph.</p>
+
+<div class="endpoint-card" id="ep-score">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/score</span>
+<span class="price-tag">1 sat</span>
+</div>
+<div class="desc">Get the WoT trust score for any Nostr pubkey. Returns PageRank-based score (0-100), follower/engagement stats, topics, and external assertions.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey, npub, or NIP-05 identifier <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Example</div>
+<div class="code-block">curl "https://wot.klabo.world/score?pubkey=npub1sg6plzptd64u62a878hep2kev88swjh3tw00gjsfl8f237lmu63q0uf63m"</div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2",
+  "score": 21, "raw_score": 0.00847, "found": true,
+  "followers": 87421, "post_count": 1203, "reactions": 54302,
+  "zap_amount": 1250000, "zap_count": 892,
+  "topics": ["bitcoin", "nostr", "lightning"],
+  "composite_score": 23,
+  "graph_size": 145000
+}</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/score?pubkey=82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-audit">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/audit</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Detailed breakdown of all scoring components: PageRank position, engagement metrics, top followers, external assertions, and graph context.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey, npub, or NIP-05 <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Example</div>
+<div class="code-block">curl "https://wot.klabo.world/audit?pubkey=jb55@jb55.com"</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/audit?pubkey=32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-batch">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/batch</span>
+<span class="price-tag">10 sats</span>
+</div>
+<div class="desc">Score up to 100 pubkeys in a single request. Returns score, found status, and follower count for each.</div>
+<div class="params">
+<div class="params-title">Request Body (JSON)</div>
+<div class="param"><span class="param-name">pubkeys</span><span class="param-type">string[]</span><span class="param-desc">Array of hex pubkeys or npubs (max 100) <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Example</div>
+<div class="code-block">curl -X POST "https://wot.klabo.world/batch" \
+  -d '{"pubkeys":["82341f...","32e18..."]}'</div>
+</div>
+</div>
+
+<!-- ===== PERSONALIZED ===== -->
+<h2 id="personalized">Personalized</h2>
+<p class="section-intro">Trust scoring relative to a viewer's perspective, based on follow graph proximity.</p>
+
+<div class="endpoint-card" id="ep-personalized">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/personalized</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Personalized trust score blending 50% global PageRank with 50% follow-graph proximity. Shows mutual follows, shared connections, and trusted followers of the target.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">viewer</span><span class="param-type">string</span><span class="param-desc">Viewer's pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">target</span><span class="param-type">string</span><span class="param-desc">Target pubkey to evaluate <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Example</div>
+<div class="code-block">curl "https://wot.klabo.world/personalized?viewer=82341f...&amp;target=32e18..."</div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-similar">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/similar</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Find users with similar follow patterns using Jaccard similarity (70% follow overlap + 30% WoT score).</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Reference pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">limit</span><span class="param-type">int</span><span class="param-desc">Results to return (1-50, default 20)</span></div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/similar?pubkey=32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245&amp;limit=5')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-recommend">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/recommend</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Friends-of-friends follow recommendations. Shows people your follows trust that you don't yet follow, ranked by mutual connection count.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Your pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">limit</span><span class="param-type">int</span><span class="param-desc">Results (1-50, default 20)</span></div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/recommend?pubkey=82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2&amp;limit=5')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-compare">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/compare</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Compare two pubkeys: relationship type, shared follows/followers, follow similarity (Jaccard), trust path between them, and full profile stats.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">a</span><span class="param-type">string</span><span class="param-desc">First pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">b</span><span class="param-type">string</span><span class="param-desc">Second pubkey <span class="param-req">required</span></span></div>
+</div>
+</div>
+
+<!-- ===== GRAPH ===== -->
+<h2 id="graph">Graph</h2>
+<p class="section-intro">Explore the follow graph structure: trust paths, neighborhoods, and visualizations.</p>
+
+<div class="endpoint-card" id="ep-graph-path">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/graph</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Two modes: <strong>Trust Path</strong> (shortest path between two pubkeys via BFS, max 6 hops) or <strong>Neighborhood</strong> (local follow network around a pubkey).</div>
+<div class="params">
+<div class="params-title">Path Mode</div>
+<div class="param"><span class="param-name">from</span><span class="param-type">string</span><span class="param-desc">Source pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">to</span><span class="param-type">string</span><span class="param-desc">Target pubkey <span class="param-req">required</span></span></div>
+<div class="params-title" style="margin-top:.5rem">Neighborhood Mode</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Center pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">depth</span><span class="param-type">int</span><span class="param-desc">Graph depth (1-2, default 1)</span></div>
+<div class="param"><span class="param-name">limit</span><span class="param-type">int</span><span class="param-desc">Max neighbors (1-200, default 50)</span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-weboftrust">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/weboftrust</span>
+<span class="price-tag">3 sats</span>
+</div>
+<div class="desc">D3.js-compatible force-directed graph data centered on a pubkey. Returns nodes with group classification (center/follow/follower/mutual) and edges for visualization.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Center pubkey <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">limit</span><span class="param-type">int</span><span class="param-desc">Nodes per direction (1-200, default 50)</span></div>
+</div>
+<div class="example">
+<div class="example-title">Response Structure</div>
+<div class="code-block">{
+  "pubkey": "...", "score": 18, "rank": 3,
+  "nodes": [{"id":"...","score":18,"followers":87421,"follows":892,"group":"center"}, ...],
+  "links": [{"source":"...","target":"...","type":"follows"}, ...],
+  "node_count": 61, "link_count": 145
+}</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/weboftrust?pubkey=32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245&amp;limit=5')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<!-- ===== IDENTITY ===== -->
+<h2 id="identity">Identity</h2>
+<p class="section-intro">NIP-05 identity resolution, verification, and reverse lookups with WoT trust profiles.</p>
+
+<div class="endpoint-card" id="ep-nip05">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/nip05</span>
+<span class="price-tag">1 sat</span>
+</div>
+<div class="desc">Resolve a NIP-05 identifier to a pubkey, verify it, and return a full trust profile with trust level classification.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">id</span><span class="param-type">string</span><span class="param-desc">NIP-05 identifier (e.g. user@domain.com) <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Trust Levels</div>
+<div class="code-block">highly_trusted (80-100) | trusted (60-79) | moderate (40-59) | low (20-39) | untrusted (1-19) | unknown (0)</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/nip05?id=jb55@jb55.com')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-nip05-batch">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/nip05/batch</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Batch NIP-05 resolution for up to 50 identifiers with concurrent DNS lookups.</div>
+<div class="params">
+<div class="params-title">Request Body (JSON)</div>
+<div class="param"><span class="param-name">identifiers</span><span class="param-type">string[]</span><span class="param-desc">Array of NIP-05 identifiers (max 50) <span class="param-req">required</span></span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-nip05-reverse">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/nip05/reverse</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Reverse NIP-05 lookup: given a pubkey, fetch their profile from relays, extract their NIP-05 claim, then verify it resolves back (bidirectional verification).</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+</div>
+
+<!-- ===== TEMPORAL ===== -->
+<h2 id="temporal">Temporal</h2>
+<p class="section-intro">Time-aware trust scoring and historical analysis.</p>
+
+<div class="endpoint-card" id="ep-timeline">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/timeline</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Historical trust growth timeline. Uses follow timestamps to reconstruct month-by-month follower accumulation with growth velocity and estimated scores.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response (abbreviated)</div>
+<div class="code-block">{
+  "pubkey": "...", "current_score": 18, "current_followers": 87421,
+  "points": [
+    {"date":"2022-01","cumulative_follows":120,"new_follows":120,"estimated_score":3,"velocity":3.9},
+    {"date":"2022-02","cumulative_follows":450,"new_follows":330,"estimated_score":5,"velocity":11.8}
+  ],
+  "first_follow": "2022-01-15T...", "latest_follow": "2026-02-08T..."
+}</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/timeline?pubkey=82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-decay">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/decay</span>
+<span class="price-tag">1 sat</span>
+</div>
+<div class="desc">Time-decayed trust score using exponential decay. Newer follows count more than older ones. Configurable half-life.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+<div class="param"><span class="param-name">half_life</span><span class="param-type">int</span><span class="param-desc">Half-life in days (1-3650, default 365)</span></div>
+</div>
+<div class="example">
+<div class="example-title">Algorithm</div>
+<div class="code-block">weight(follow) = exp(-ln(2) * age_days / half_life)
+decay_score = normalized(sum(weight * pagerank_contribution))</div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-decay-top">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/decay/top</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Top pubkeys by time-decayed score. Shows rank changes vs static PageRank — identifies accounts gaining or losing trust momentum.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">half_life</span><span class="param-type">int</span><span class="param-desc">Half-life in days (1-3650, default 365)</span></div>
+<div class="param"><span class="param-name">limit</span><span class="param-type">int</span><span class="param-desc">Results (1-200, default 50)</span></div>
+</div>
+</div>
+
+<!-- ===== MODERATION ===== -->
+<h2 id="moderation">Moderation</h2>
+<p class="section-intro">Spam detection using multi-signal WoT-based analysis.</p>
+
+<div class="endpoint-card" id="ep-spam">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/spam</span>
+<span class="price-tag">2 sats</span>
+</div>
+<div class="desc">Multi-signal spam probability analysis. Combines WoT score, follow ratio, account age, engagement, reports, and activity patterns into a 0-100% spam probability with detailed signal breakdown.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Signal Weights</div>
+<div class="code-block">wot_score: 0.30 | follow_ratio: 0.15 | account_age: 0.15
+engagement: 0.15 | reports: 0.15 | activity_pattern: 0.10
+
+Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human</div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/spam?pubkey=32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-spam-batch">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/spam/batch</span>
+<span class="price-tag">10 sats</span>
+</div>
+<div class="desc">Bulk spam check for up to 100 pubkeys. Returns compact classification results with aggregated summary counts.</div>
+<div class="params">
+<div class="params-title">Request Body (JSON)</div>
+<div class="param"><span class="param-name">pubkeys</span><span class="param-type">string[]</span><span class="param-desc">Array of hex pubkeys or npubs (max 100) <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response (abbreviated)</div>
+<div class="code-block">{
+  "results": [{"pubkey":"...","spam_probability":0.12,"classification":"likely_human","summary":"..."}],
+  "summary": {"likely_human":1,"suspicious":0,"likely_spam":0,"errors":0}
+}</div>
+</div>
+</div>
+
+<!-- ===== ENGAGEMENT ===== -->
+<h2 id="engagement">Engagement</h2>
+<p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
+
+<div class="endpoint-card" id="ep-metadata">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/metadata</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Full NIP-85 engagement metadata: posts, replies, reactions, zaps sent/received, and first event timestamp.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-event">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/event</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Engagement score for a specific Nostr event (kind 30383): comments, reposts, reactions, zaps.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">id</span><span class="param-type">string</span><span class="param-desc">Event ID (hex) <span class="param-req">required</span></span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-external">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/external</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">External identifier scores (NIP-73, kind 30385). Without an id parameter, returns top 50 identifiers. With id, returns the specific identifier's engagement data.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">id</span><span class="param-type">string</span><span class="param-desc">External identifier (optional — omit for top 50)</span></div>
+</div>
+</div>
+
+<!-- ===== RANKING ===== -->
+<h2 id="ranking">Ranking</h2>
+
+<div class="endpoint-card" id="ep-top">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/top</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Top 50 most-trusted pubkeys by PageRank with normalized scores and follower counts.</div>
+</div>
+
+<div class="endpoint-card" id="ep-export">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/export</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Export all pubkeys and scores as a JSON array. Full graph dump for offline analysis.</div>
+</div>
+
+<!-- ===== INFRASTRUCTURE ===== -->
+<h2 id="infrastructure">Infrastructure</h2>
+
+<div class="endpoint-card" id="ep-relay">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/relay</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Relay trust score combining infrastructure metrics from trustedrelays.xyz (70%) with operator WoT score (30%). Includes uptime, quality, and accessibility data.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">url</span><span class="param-type">string</span><span class="param-desc">Relay URL (e.g. wss://relay.damus.io) <span class="param-req">required</span></span></div>
+</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/relay?url=wss://relay.damus.io')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-authorized">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/authorized</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Kind 10040 authorized users who declared trust in this NIP-85 provider.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Filter by specific provider (optional)</span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-communities">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/communities</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Trust communities detected via label propagation over the follow graph. With a pubkey, returns that user's community and peers.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Get community for specific pubkey (optional)</span></div>
+</div>
+</div>
+
+<div class="endpoint-card" id="ep-publish">
+<div class="endpoint-header">
+<span class="method method-post">POST</span>
+<span class="path">/publish</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Publish all NIP-85 assertion events (kinds 30382, 30383, 30384, 30385) and NIP-89 handler info to configured relays.</div>
+</div>
+
+<div class="endpoint-card" id="ep-providers">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/providers</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">External NIP-85 assertion providers and their assertion counts.</div>
+</div>
+
+<div class="endpoint-card" id="ep-stats">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/stats</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Service metadata: graph size, algorithm config, relay list, rate limits, and uptime.</div>
+<button class="try-btn" onclick="tryEndpoint(this,'/stats')">Try it</button>
+<div class="try-result"></div>
+</div>
+
+<div class="endpoint-card" id="ep-health">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/health</span>
+<span class="free">FREE</span>
+</div>
+<div class="desc">Health check endpoint. Returns ready/starting status and graph statistics.</div>
+</div>
+
+<footer>
+<span><a href="/">← Back to WoT Scoring</a></span>
+<span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
+<span><a href="https://github.com/joelklabo/wot-scoring">Source (MIT)</a></span>
+<span>Operator: <a href="https://njump.me/max@klabo.world">max@klabo.world</a></span>
+</footer>
+</div>
+<script>
+function tryEndpoint(btn,path){
+var res=btn.nextElementSibling;
+btn.disabled=true;btn.textContent="Loading...";
+res.className="try-result active";
+res.innerHTML='<div style="color:#555">Fetching...</div>';
+fetch(path).then(function(r){return r.json()}).then(function(d){
+btn.disabled=false;btn.textContent="Try it";
+res.innerHTML='<div class="code-block" style="max-height:300px;overflow:auto">'+JSON.stringify(d,null,2)+'</div>';
+}).catch(function(e){
+btn.disabled=false;btn.textContent="Try it";
+res.innerHTML='<div class="code-block" style="color:#f87171">Error: '+e.message+'</div>';
+});}
+</script>
+</body>
+</html>`
+
 const landingPageHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2038,7 +2634,11 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">POST</span><span class="path">/nip05/batch</span><span class="desc">— Bulk NIP-05 verification (up to 50 identifiers)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/nip05/reverse?pubkey=&lt;hex&gt;</span><span class="desc">— Reverse NIP-05 lookup (pubkey → identity, bidirectional verification)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/spam?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Spam detection: multi-signal analysis with classification</span></div>
+<div class="endpoint"><span class="method">POST</span><span class="path">/spam/batch</span><span class="desc">— Bulk spam check (up to 100 pubkeys)</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/weboftrust?pubkey=&lt;hex|npub&gt;</span><span class="desc">— D3.js-compatible trust graph visualization</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/timeline?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Historical trust growth timeline</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
 </div>
 
 <div class="nip85-kinds" style="margin-top:2rem">
@@ -2046,7 +2646,7 @@ footer a:hover{text-decoration:underline}
 <p style="color:#aaa;font-size:.95rem;margin-bottom:1rem">Pay-per-query via Lightning Network. Free tier: 10 requests/day per IP. After that, pay sats per query.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem">
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
-<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /spam</span></div>
+<div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /weboftrust (3 sats)</span></div>
 <div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch (up to 100 pubkeys)</span></div>
 </div>
@@ -2055,6 +2655,7 @@ footer a:hover{text-decoration:underline}
 
 <footer>
 <span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
+<span><a href="/docs">API Docs</a></span>
 <span><a href="https://github.com/joelklabo/wot-scoring">Source (MIT)</a></span>
 <span>Operator: <a href="https://njump.me/max@klabo.world">max@klabo.world</a></span>
 </footer>
@@ -2582,6 +3183,10 @@ func main() {
 	http.HandleFunc("/spam", handleSpam)
 	http.HandleFunc("/spam/batch", handleSpamBatch)
 	http.HandleFunc("/weboftrust", handleWebOfTrust)
+	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, docsPageHTML)
+	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

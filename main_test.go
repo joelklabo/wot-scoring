@@ -829,3 +829,49 @@ func TestHandleAuditWithExternalAssertions(t *testing.T) {
 		t.Error("expected at least 1 external source")
 	}
 }
+
+func TestDocsPageReturnsHTML(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(docsPageHTML))
+	})
+	req := httptest.NewRequest("GET", "/docs", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if ct != "text/html; charset=utf-8" {
+		t.Fatalf("expected text/html, got %s", ct)
+	}
+	body := rr.Body.String()
+	if len(body) < 1000 {
+		t.Fatalf("docs page too small: %d bytes", len(body))
+	}
+	// Verify key sections exist
+	for _, section := range []string{"API Documentation", "/score", "/batch", "/spam", "/weboftrust", "L402", "Try it"} {
+		if !bytes.Contains(rr.Body.Bytes(), []byte(section)) {
+			t.Errorf("docs page missing expected content: %s", section)
+		}
+	}
+}
+
+func TestDocsPageContainsAllEndpoints(t *testing.T) {
+	endpoints := []string{
+		"/score", "/audit", "/batch", "/personalized", "/similar",
+		"/recommend", "/compare", "/graph", "/weboftrust",
+		"/nip05", "/nip05/batch", "/nip05/reverse",
+		"/timeline", "/decay", "/decay/top",
+		"/spam", "/spam/batch",
+		"/metadata", "/event", "/external",
+		"/top", "/export", "/relay", "/authorized", "/communities",
+		"/publish", "/providers", "/stats", "/health",
+	}
+	for _, ep := range endpoints {
+		if !bytes.Contains([]byte(docsPageHTML), []byte(ep)) {
+			t.Errorf("docs page missing endpoint: %s", ep)
+		}
+	}
+}
