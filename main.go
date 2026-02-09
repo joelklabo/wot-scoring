@@ -2401,6 +2401,50 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== REPUTATION ===== -->
+<h2 id="reputation">Reputation</h2>
+<p class="section-intro">Comprehensive reputation profiles. A single endpoint that combines WoT standing, Sybil resistance, community integration, anomaly cleanliness, and network diversity into one reputation grade (A-F).</p>
+
+<div class="endpoint-card" id="ep-reputation">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/reputation</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Composite reputation score (0-100) combining five dimensions: WoT standing (PageRank percentile), Sybil resistance (follower quality + mutual trust), community integration (cluster membership), anomaly cleanliness (absence of manipulation flags), and network diversity (follower spread). Returns letter grade (A-F), classification, confidence, and per-component breakdown.</div>
+<div class="params">
+<div class="params-title">Parameters</div>
+<div class="param"><span class="param-name">pubkey</span><span class="param-type">string</span><span class="param-desc">Hex pubkey or npub <span class="param-req">required</span></span></div>
+</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "32e1827635...",
+  "reputation_score": 72,
+  "grade": "B",
+  "classification": "good",
+  "confidence": 0.85,
+  "components": [
+    {"name": "wot_standing", "score": 0.82, "weight": 0.30, "grade": "A", "description": "WoT percentile: 85%"},
+    {"name": "sybil_resistance", "score": 0.65, "weight": 0.25, "grade": "B", "description": "Follower quality 18.2, 45 mutuals"},
+    {"name": "community_integration", "score": 0.70, "weight": 0.15, "grade": "B", "description": "Community size: 1200"},
+    {"name": "anomaly_cleanliness", "score": 1.0, "weight": 0.15, "grade": "A", "description": "0 anomaly flags"},
+    {"name": "network_diversity", "score": 0.55, "weight": 0.15, "grade": "C", "description": "Follower diversity"}
+  ],
+  "summary": "32e18276...7a3: Grade B (72/100) — WoT score 78, no anomalies, community of 1200",
+  "trust_score": 78,
+  "sybil_score": 65,
+  "anomaly_count": 0,
+  "community_size": 1200,
+  "followers": 850,
+  "follows": 320,
+  "mutual_count": 45,
+  "percentile": 0.85,
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== ENGAGEMENT ===== -->
 <h2 id="engagement">Engagement</h2>
 <p class="section-intro">Event-level and metadata scoring for NIP-85 assertions.</p>
@@ -2891,7 +2935,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -3441,6 +3485,7 @@ func main() {
 	http.HandleFunc("/sybil", handleSybil)
 	http.HandleFunc("/sybil/batch", handleSybilBatch)
 	http.HandleFunc("/trust-path", handleTrustPath)
+	http.HandleFunc("/reputation", handleReputation)
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -39,7 +39,7 @@ func TestOpenAPIContainsAllEndpoints(t *testing.T) {
 		"/nip05", "/nip05/batch", "/nip05/reverse",
 		"/timeline", "/decay", "/decay/top",
 		"/spam", "/spam/batch", "/blocked", "/verify", "/anomalies",
-		"/sybil", "/sybil/batch", "/trust-path",
+		"/sybil", "/sybil/batch", "/trust-path", "/reputation",
 		"/metadata", "/event", "/external",
 		"/top", "/export", "/relay", "/authorized", "/communities",
 		"/publish", "/providers", "/health", "/docs", "/swagger", "/openapi.json",

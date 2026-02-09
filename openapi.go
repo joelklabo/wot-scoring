@@ -46,7 +46,8 @@ const openAPISpec = `{
     {"name": "Visualization", "description": "D3.js-compatible graph data and trust comparison"},
     {"name": "Verification", "description": "Cross-provider NIP-85 assertion verification"},
     {"name": "Sybil Resistance", "description": "Sybil detection and resistance scoring for relay operators"},
-    {"name": "Trust Paths", "description": "Multi-hop trust path analysis with scoring and diversity metrics"}
+    {"name": "Trust Paths", "description": "Multi-hop trust path analysis with scoring and diversity metrics"},
+    {"name": "Reputation", "description": "Composite reputation scoring combining WoT, Sybil resistance, community, and anomaly analysis"}
   ],
   "paths": {
     "/score": {
@@ -640,6 +641,22 @@ const openAPISpec = `{
         "responses": {
           "200": {"description": "Trust path analysis with scored paths, diversity metrics, and classification"},
           "400": {"description": "Missing or invalid pubkeys"},
+          "402": {"description": "L402 payment required (5 sats)"}
+        }
+      }
+    },
+    "/reputation": {
+      "get": {
+        "tags": ["Reputation"],
+        "operationId": "getReputation",
+        "summary": "Comprehensive reputation profile for a pubkey",
+        "description": "Computes a composite reputation score (0-100, grade A-F) by combining five dimensions: WoT standing (PageRank percentile), Sybil resistance (follower quality and mutual trust), community integration (cluster membership and quality), anomaly cleanliness (absence of trust manipulation flags), and network diversity (follower spread across graph regions). Returns a detailed breakdown with per-component scores, grades, and a human-readable summary.",
+        "parameters": [
+          {"name": "pubkey", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Hex pubkey or npub to analyze"}
+        ],
+        "responses": {
+          "200": {"description": "Reputation profile with composite score, grade, component breakdown, and summary"},
+          "400": {"description": "Missing or invalid pubkey"},
           "402": {"description": "L402 payment required (5 sats)"}
         }
       }
