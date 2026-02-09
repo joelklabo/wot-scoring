@@ -14,20 +14,29 @@ WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known 
 - **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 - **Kind 10040 — Provider Authorization.** Consumes and serves authorization events where users explicitly authorize trusted scoring providers.
 
-**Live service:** [wot.klabo.world](https://wot.klabo.world) — 41 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 49 API endpoints, auto re-crawls every 6 hours, publishes to 5 relays. L402 Lightning paywall deployed to production. Machine-readable [OpenAPI 3.0.3 spec](https://wot.klabo.world/openapi.json) and interactive [Swagger UI explorer](https://wot.klabo.world/swagger) for automated integration and live API testing. [Interactive demo dashboard](https://wot.klabo.world/demo) with 13 live cards showcasing the API. [JavaScript client SDK](https://github.com/joelklabo/nostr-wot) with zero dependencies and L402 payment support.
 
 ## Functional Readiness
 
-The service is deployed and running in production. All 42 endpoints serve live data. 371 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, multi-hop trust path analysis, composite reputation scoring, link prediction, influence propagation analysis, network topology health analysis, OpenAPI spec validation, and Swagger UI tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
+The service is deployed and running in production. All 49 endpoints serve live data. 493 automated tests pass in CI (including L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, graph visualization, cross-provider assertion verification, trust anomaly detection, Sybil resistance scoring, multi-hop trust path analysis, composite reputation scoring, link prediction, influence propagation analysis, network topology health analysis, trust circle analysis, follow quality assessment, score auditing, friend recommendations, OpenAPI spec validation, Swagger UI, and demo page tests). The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
-Interactive UI features:
+**Interactive demo dashboard** ([wot.klabo.world/demo](https://wot.klabo.world/demo)) — 13 live cards demonstrating the API, with 14 API endpoint calls and 10 parallel fetches per search:
 - **Score Lookup** — real-time trust score search with live debounced queries
 - **Compare** — side-by-side trust comparison with relationship badges and shared follow analysis
-- **Trust Path** — BFS shortest path visualization between any two pubkeys
+- **Trust Path** — BFS shortest path visualization between any two pubkeys with hop-by-hop detail
 - **Timeline** — trust evolution over time with monthly follower growth bars and velocity coloring
 - **Spam Check** — multi-signal spam analysis with visual signal breakdown and classification
 - **Trust Graph** — interactive force-directed SVG visualization of a pubkey's trust network with color-coded nodes (follows, followers, mutual)
 - **Leaderboard** — top 10 pubkeys with live data from the scoring API
+- **Follow Quality** — follow list quality score with entropy-based diversity, ghost follower ratio, and actionable suggestions
+- **Trust Circle Compare** — trust circle compatibility between two pubkeys with Jaccard coefficient, shared connections, and compatibility score
+- **Network Health** — auto-loading network-wide health metrics (no pubkey needed): 51k nodes, 620k edges, Gini coefficient, power-law exponent
+- **Anomaly Detection** — suspicious pattern analysis with risk classification
+- **Link Prediction** — "people you may know" with 5 graph-theoretic signals
+- **Score Audit** — full PageRank breakdown: rank, percentile, top followers, engagement metrics, composite scoring weights
+- **Recommended Follows** — friends-of-friends recommendations with mutual counts and WoT scores
+
+**JavaScript client SDK** ([github.com/joelklabo/nostr-wot](https://github.com/joelklabo/nostr-wot)) — zero-dependency client library covering all 48 endpoints with TypeScript declarations and L402 payment support. ESM/CJS dual export. Enables developers to integrate WoT scoring with `npm install nostr-wot`.
 
 ## Depth & Innovation
 
@@ -56,6 +65,12 @@ Beyond standard PageRank scoring, we implemented:
 - **Link prediction** (`/predict`) — graph-theoretic link prediction using five complementary signals: Common Neighbors (shared connections between two pubkeys), Adamic-Adar Index (rarity-weighted common connections — rare bridges count more), Preferential Attachment (degree product reflecting social gravity), Jaccard Coefficient (neighborhood overlap ratio), and WoT Score Proximity (trust score similarity). Returns a prediction score (0-1), confidence level, classification (very_likely to very_unlikely), per-signal breakdown with raw values and weights, and top mutual connections. Useful for "people you may know" features in Nostr clients.
 - **Influence propagation** (`/influence`) — differential PageRank what-if analysis. Simulates a follow or unfollow and computes how trust scores cascade through the entire network. Returns the target's score change, the top 20 most-affected pubkeys with current/simulated scores and deltas, plus summary metrics: total positive/negative changes, average delta, influence radius classification (local/moderate/wide/global), and overall influence classification. Enables clients to answer "what happens to the network if I follow/unfollow this person?" — a genuinely novel capability for Nostr trust analysis.
 - **Network topology health** (`/network-health`) — comprehensive graph-theoretic health analysis of the entire WoT network. Computes degree distribution (mean/median/max in/out degree, power-law exponent via Hill estimator), connectivity metrics (weakly connected components, largest component size, isolated nodes), reciprocity (mutual follow ratio), graph density, Gini coefficient of PageRank score centralization (measures inequality), top network hubs by combined degree, and an overall health score (0-100) with classification (nascent/weak/developing/good/excellent). Enables network operators and researchers to monitor the health of the Nostr trust network over time.
+- **Trust circle analysis** (`/trust-circle`) — identifies a pubkey's mutual follow circle (bidirectional connections) with cohesion metrics (fraction of mutual pairs realized), density (directed edge ratio), and per-member role classification (hub/connector/participant). The geometric mean of normalized PageRank scores gives an intuitive 0-1 strength metric for each connection. Enables Nostr clients to build "close friends" features.
+- **Trust circle comparison** (`/trust-circle/compare`) — compares two pubkeys' mutual follow circles with overlap analysis, unique connections, Jaccard coefficient, and a compatibility score. Answers "how connected are these two people's circles?" — useful for community analysis and trust transitivity.
+- **Follow quality assessment** (`/follow-quality`) — analyzes how "healthy" a pubkey's follow list is using Shannon entropy (diversity), ghost follower ratio, activity distribution, and categorization. Returns a 0-100 quality score with actionable suggestions ("clean up X ghost follows"). Enables "clean up your follow list" UX in Nostr clients.
+- **Score auditing** (`/audit`) — full transparency into a pubkey's trust score: raw PageRank, normalized score, rank among all nodes, percentile, follower/following counts, composite scoring weights (70/30 internal/external), top 5 followers by WoT score, and engagement activity. Answers "why does this account have this score?"
+- **Follow recommendations** (`/recommend`) — friends-of-friends analysis weighted by mutual follow ratio (60%) and WoT score (40%). Returns top candidates with mutual connection counts and quality metrics. Powers "people you may know" features with trust-weighted recommendations.
+- **Batch influence analysis** (`/influence/batch`) — scores up to 50 pubkeys' influence using pre-computed PageRank for O(1) lookups. Returns network role classification (hub/authority/connector/consumer/observer), 2-hop reach estimation, and influence tier for each pubkey.
 - **Full NIP-85 kind 30382 tag compliance** — publishes ALL spec-defined tags: rank, followers, post/reply/reaction counts, zap stats, daily zap averages, common topics (hashtags), active hours (UTC), reports sent/received, and account age. No other known provider publishes all 17 tag types.
 
 ## Interoperability
@@ -71,6 +86,10 @@ Beyond standard PageRank scoring, we implemented:
 - **Reverse NIP-05 lookup** — `/nip05/reverse` resolves pubkey→NIP-05 by fetching kind 0 profiles from relays, with bidirectional verification
 - **Trust anomaly detection** — `/anomalies` provides Sybil-resistance analysis, helping clients identify accounts with artificially inflated follow counts or concentrated trust dependencies
 - **Sybil resistance scoring** — `/sybil` computes a 0-100 resistance score from five graph signals (follower quality, mutual trust, score consistency, follower diversity, account substance), with classifications and confidence levels for relay operators to gate access. `/sybil/batch` scores up to 50 pubkeys at once.
+- **Cross-provider comparison** (`/compare-providers`) — queries external NIP-85 providers for the same pubkey and computes consensus metrics (agreement, divergence). First known cross-provider NIP-85 comparison endpoint.
+- **WebSocket real-time updates** (`/ws/scores`) — real-time trust score change notifications via WebSocket. Nostr clients can subscribe for live updates without polling.
+- **Trust circle analysis** — `/trust-circle` and `/trust-circle/compare` enable social graph analysis of bidirectional trust relationships, powering "close friends" and community compatibility features.
+- **JavaScript client SDK** — [nostr-wot](https://github.com/joelklabo/nostr-wot) zero-dependency library with L402 payment support. Any developer can integrate WoT scoring in minutes.
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 
@@ -93,9 +112,11 @@ The relay trust endpoint further decentralizes infrastructure trust by combining
 - MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
 - Comprehensive README with every endpoint documented and example responses
 - CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
-- 252 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, mute list analysis, graph visualization, topics, activity hours, reports, API handlers, API documentation, OpenAPI spec validation, and Swagger UI
+- 493 tests covering scoring, normalization, event parsing, relay trust, L402 paywall, community detection, authorization, NIP-05 single/bulk/reverse verification, trust timeline, spam detection, batch spam, mute list analysis, graph visualization, topics, activity hours, reports, trust circles, follow quality, score auditing, recommendations, link prediction, influence propagation, anomaly detection, Sybil resistance, trust paths, reputation scoring, network health, cross-provider verification, API handlers, API documentation, OpenAPI spec validation, Swagger UI, and demo page tests
 - Interactive API documentation at `/docs` with endpoint cards, request/response examples, and live "Try it" buttons
-- [Swagger UI API explorer](https://wot.klabo.world/swagger) at `/swagger` — interactive testing of all 33 endpoints directly in the browser
+- [Interactive demo dashboard](https://wot.klabo.world/demo) at `/demo` — 13 live cards demonstrating 14 API endpoints with no setup required
+- [Swagger UI API explorer](https://wot.klabo.world/swagger) at `/swagger` — interactive testing of all 49 endpoints directly in the browser
+- [JavaScript client SDK](https://github.com/joelklabo/nostr-wot) — zero-dependency library with TypeScript declarations for all endpoints
 - Machine-readable [OpenAPI 3.0.3 spec](https://wot.klabo.world/openapi.json) at `/openapi.json` — enables automated client generation, Swagger UI integration, Postman import, and MCP agent discovery
 - This impact statement and technical architecture documented in the repository
 
@@ -109,34 +130,34 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 
 | Endpoint | Price | Free Tier |
 |----------|-------|-----------|
-| `/score` | 1 sat | 10/day per IP |
-| `/decay` | 1 sat | 10/day per IP |
-| `/nip05` | 1 sat | 10/day per IP |
-| `/personalized` | 2 sats | 10/day per IP |
-| `/similar` | 2 sats | 10/day per IP |
-| `/recommend` | 2 sats | 10/day per IP |
-| `/compare` | 2 sats | 10/day per IP |
-| `/nip05/reverse` | 2 sats | 10/day per IP |
-| `/spam` | 2 sats | 10/day per IP |
-| `/blocked` | 2 sats | 10/day per IP |
-| `/audit` | 5 sats | 10/day per IP |
-| `/nip05/batch` | 5 sats | 10/day per IP |
-| `/spam/batch` | 10 sats | 10/day per IP |
-| `/timeline` | 2 sats | 10/day per IP |
-| `/verify` | 2 sats | 10/day per IP |
-| `/weboftrust` | 3 sats | 10/day per IP |
-| `/anomalies` | 3 sats | 10/day per IP |
-| `/sybil` | 3 sats | 10/day per IP |
-| `/predict` | 3 sats | 10/day per IP |
-| `/trust-path` | 5 sats | 10/day per IP |
-| `/reputation` | 5 sats | 10/day per IP |
-| `/influence` | 5 sats | 10/day per IP |
-| `/network-health` | 5 sats | 10/day per IP |
-| `/batch` | 10 sats | 10/day per IP |
-| `/sybil/batch` | 10 sats | 10/day per IP |
+| `/score` | 1 sat | 50/day per IP |
+| `/decay` | 1 sat | 50/day per IP |
+| `/nip05` | 1 sat | 50/day per IP |
+| `/personalized` | 2 sats | 50/day per IP |
+| `/similar` | 2 sats | 50/day per IP |
+| `/recommend` | 2 sats | 50/day per IP |
+| `/compare` | 2 sats | 50/day per IP |
+| `/nip05/reverse` | 2 sats | 50/day per IP |
+| `/spam` | 2 sats | 50/day per IP |
+| `/blocked` | 2 sats | 50/day per IP |
+| `/audit` | 5 sats | 50/day per IP |
+| `/nip05/batch` | 5 sats | 50/day per IP |
+| `/spam/batch` | 10 sats | 50/day per IP |
+| `/timeline` | 2 sats | 50/day per IP |
+| `/verify` | 2 sats | 50/day per IP |
+| `/weboftrust` | 3 sats | 50/day per IP |
+| `/anomalies` | 3 sats | 50/day per IP |
+| `/sybil` | 3 sats | 50/day per IP |
+| `/predict` | 3 sats | 50/day per IP |
+| `/trust-path` | 5 sats | 50/day per IP |
+| `/reputation` | 5 sats | 50/day per IP |
+| `/influence` | 5 sats | 50/day per IP |
+| `/network-health` | 5 sats | 50/day per IP |
+| `/batch` | 10 sats | 50/day per IP |
+| `/sybil/batch` | 10 sats | 50/day per IP |
 
 **How it works:**
-1. First 10 requests/day per IP are free (no payment needed)
+1. First 50 requests/day per IP are free (no payment needed)
 2. After free tier: API returns HTTP 402 with a Lightning invoice
 3. Client pays invoice, retries request with `X-Payment-Hash` header
 4. Server verifies payment via LNbits, serves the response
