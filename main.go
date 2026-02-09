@@ -2609,6 +2609,42 @@ Thresholds: &gt;= 70%% likely_spam | 40-70%% suspicious | &lt; 40%% likely_human
 </div>
 </div>
 
+<!-- ===== CROSS-PROVIDER ===== -->
+<h2 id="cross-provider">Cross-Provider Comparison</h2>
+<p class="section-intro">Compare WoT scores from multiple independent NIP-85 providers to assess consensus.</p>
+
+<div class="endpoint-card" id="ep-compare-providers">
+<div class="endpoint-header">
+<span class="method method-get">GET</span>
+<span class="path">/compare-providers?pubkey=&lt;hex|npub&gt;</span>
+<span class="price-tag">5 sats</span>
+</div>
+<div class="desc">Returns trust scores for a pubkey from our engine and all known external NIP-85 providers. Includes consensus metrics (mean, median, standard deviation, min/max spread, and agreement level). Demonstrates NIP-85 interoperability — different providers independently scoring the same pubkey.</div>
+<div class="example">
+<div class="example-title">Response</div>
+<div class="code-block">{
+  "pubkey": "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
+  "in_graph": true,
+  "providers": [
+    {"provider_pubkey": "self", "raw_rank": 95, "normalized_rank": 95, "followers": 18432, "is_ours": true},
+    {"provider_pubkey": "abc123...", "raw_rank": 92, "normalized_rank": 92, "followers": 17800, "is_ours": false, "assertion_count": 12500, "age_seconds": 3600},
+    {"provider_pubkey": "def456...", "raw_rank": 88, "normalized_rank": 88, "followers": 16200, "is_ours": false, "assertion_count": 8700, "age_seconds": 7200}
+  ],
+  "consensus": {
+    "provider_count": 3,
+    "mean": 91.7,
+    "median": 92.0,
+    "std_dev": 2.9,
+    "min": 88,
+    "max": 95,
+    "spread": 7,
+    "agreement": "strong"
+  },
+  "graph_size": 51319
+}</div>
+</div>
+</div>
+
 <!-- ===== REAL-TIME ===== -->
 <h2 id="realtime">Real-Time Streaming</h2>
 <p class="section-intro">WebSocket endpoint for live score updates pushed after each graph recomputation.</p>
@@ -3127,6 +3163,7 @@ footer a:hover{text-decoration:underline}
 <div class="endpoint"><span class="method">POST</span><span class="path">/sybil/batch</span><span class="desc">— Batch Sybil scoring (up to 50 pubkeys)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/influence?pubkey=&lt;hex|npub&gt;&amp;other=&lt;hex|npub&gt;</span><span class="desc">— Influence propagation: what-if analysis for follows/unfollows</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/network-health</span><span class="desc">— Network topology health: degree distribution, connectivity, Gini, hubs</span></div>
+<div class="endpoint"><span class="method">GET</span><span class="path">/compare-providers?pubkey=&lt;hex|npub&gt;</span><span class="desc">— Cross-provider WoT score comparison with consensus metrics</span></div>
 <div class="endpoint"><span class="method">WS</span><span class="path">/ws/scores</span><span class="desc">— Real-time score streaming via WebSocket (subscribe to pubkey updates)</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/providers</span><span class="desc">— External NIP-85 assertion providers</span></div>
 <div class="endpoint"><span class="method">GET</span><span class="path">/docs</span><span class="desc">— Interactive API documentation</span></div>
@@ -3139,7 +3176,7 @@ footer a:hover{text-decoration:underline}
 <div class="kind"><span class="kind-num" style="background:#16a34a">1 sat</span><span class="kind-desc">/score, /decay, /nip05</span></div>
 <div class="kind"><span class="kind-num" style="background:#2563eb">2 sats</span><span class="kind-desc">/personalized, /similar, /recommend, /compare, /nip05/reverse, /timeline, /spam, /verify</span></div>
 <div class="kind"><span class="kind-num" style="background:#0ea5e9">3 sats</span><span class="kind-desc">/weboftrust, /anomalies, /sybil, /predict</span></div>
-<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence, /network-health</span></div>
+<div class="kind"><span class="kind-num" style="background:#9333ea">5 sats</span><span class="kind-desc">/audit, /nip05/batch, /trust-path, /reputation, /influence, /network-health, /compare-providers</span></div>
 <div class="kind"><span class="kind-num" style="background:#dc2626">10 sats</span><span class="kind-desc">/batch, /spam/batch, /sybil/batch</span></div>
 </div>
 <p style="color:#666;font-size:.85rem;margin-top:.75rem">Endpoints not listed above are free and unlimited. Payment via L402 protocol: request → 402 + invoice → pay → retry with X-Payment-Hash header.</p>
@@ -3699,6 +3736,7 @@ func main() {
 	http.HandleFunc("/predict", handlePredict)
 	http.HandleFunc("/influence", handleInfluence)
 	http.HandleFunc("/network-health", handleNetworkHealth)
+	http.HandleFunc("/compare-providers", handleCompareProviders)
 	http.HandleFunc("/ws/scores", handleWebSocketInfo(wsHub))
 	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {

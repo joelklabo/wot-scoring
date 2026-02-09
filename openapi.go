@@ -50,7 +50,8 @@ const openAPISpec = `{
     {"name": "Reputation", "description": "Composite reputation scoring combining WoT, Sybil resistance, community, and anomaly analysis"},
     {"name": "Link Prediction", "description": "Graph-theoretic link prediction for follow relationship likelihood"},
     {"name": "Real-Time", "description": "WebSocket streaming for live score updates"},
-    {"name": "Network Analysis", "description": "Graph topology health metrics and network-wide analysis"}
+    {"name": "Network Analysis", "description": "Graph topology health metrics and network-wide analysis"},
+    {"name": "Cross-Provider", "description": "Compare WoT scores across multiple NIP-85 providers for consensus analysis"}
   ],
   "paths": {
     "/score": {
@@ -709,6 +710,28 @@ const openAPISpec = `{
           "200": {"description": "Network health metrics including connectivity, degree stats, score distribution, top hubs, and health classification"},
           "402": {"description": "L402 payment required (5 sats)"},
           "503": {"description": "Graph not built yet"}
+        }
+      }
+    },
+    "/compare-providers": {
+      "get": {
+        "tags": ["Cross-Provider"],
+        "operationId": "compareProviders",
+        "summary": "Compare WoT scores across NIP-85 providers",
+        "description": "Returns trust scores for a pubkey from our engine and all known external NIP-85 providers. Includes consensus metrics (mean, median, standard deviation, agreement level). Demonstrates NIP-85 interoperability — different providers independently scoring the same pubkey.",
+        "parameters": [
+          {
+            "name": "pubkey",
+            "in": "query",
+            "required": true,
+            "description": "Hex pubkey or npub",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {"description": "Cross-provider score comparison with consensus metrics"},
+          "400": {"description": "Missing or invalid pubkey"},
+          "402": {"description": "L402 payment required (5 sats)"}
         }
       }
     },
