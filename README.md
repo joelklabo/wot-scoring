@@ -677,9 +677,11 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | `/audit`, `/nip05/batch` | 5 sats |
 | `/batch`, `/spam/batch` | 10 sats |
 
-All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`) are free and unlimited.
+All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`, `/openapi.json`) are free and unlimited.
 
 **Interactive API documentation:** [https://wot.klabo.world/docs](https://wot.klabo.world/docs)
+
+**OpenAPI Spec:** [https://wot.klabo.world/openapi.json](https://wot.klabo.world/openapi.json) — machine-readable OpenAPI 3.0.3 specification for automated client generation and tool integration
 
 **Usage flow:**
 

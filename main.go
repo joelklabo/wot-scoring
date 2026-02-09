@@ -1856,6 +1856,7 @@ footer a{color:#7c3aed}
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>L402 payment flow:</strong> Request → 402 response with Lightning invoice → Pay invoice → Retry with <code style="color:#7c3aed">X-Payment-Hash</code> header.</p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Rate limit:</strong> 100 requests/min per IP.</p>
 <p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>Base URL:</strong> <code style="color:#7c3aed">https://wot.klabo.world</code></p>
+<p style="color:#aaa;font-size:.9rem;margin:.5rem 0"><strong>OpenAPI Spec:</strong> <a href="/openapi.json" style="color:#7c3aed">GET /openapi.json</a> — machine-readable API specification</p>
 </div>
 
 <div class="nav">
@@ -2656,6 +2657,7 @@ footer a:hover{text-decoration:underline}
 <footer>
 <span>Built for <a href="https://nosfabrica.com/wotathon/">WoT-a-thon</a></span>
 <span><a href="/docs">API Docs</a></span>
+<span><a href="/openapi.json">OpenAPI Spec</a></span>
 <span><a href="https://github.com/joelklabo/wot-scoring">Source (MIT)</a></span>
 <span>Operator: <a href="https://njump.me/max@klabo.world">max@klabo.world</a></span>
 </footer>
@@ -3183,6 +3185,7 @@ func main() {
 	http.HandleFunc("/spam", handleSpam)
 	http.HandleFunc("/spam/batch", handleSpamBatch)
 	http.HandleFunc("/weboftrust", handleWebOfTrust)
+	http.HandleFunc("/openapi.json", handleOpenAPI)
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, docsPageHTML)
