@@ -418,6 +418,63 @@ Returns score, composite score, and follower count per pubkey. Supports both hex
 
 On publish, the service also emits a kind 31990 event (NIP-89 Recommended Application Handler) announcing support for kinds 30382, 30383, 30384, and 30385. This lets Nostr clients auto-discover the service as a NIP-85 assertion provider.
 
+## Client Integration
+
+Any Nostr client can consume NIP-85 trust scores directly from relays — no API dependency required. Here's how to query user trust assertions using nostr-tools:
+
+```javascript
+import { SimplePool } from 'nostr-tools/pool'
+
+const pool = new SimplePool()
+const WOT_PROVIDER = '28207d114dec1046c40ad9d8f5b2d86e0e470e4c0fc35739c17679faa8df4534'
+const relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net']
+
+// Query trust score for a pubkey
+async function getTrustScore(targetPubkey) {
+  const events = await pool.querySync(relays, {
+    kinds: [30382],
+    authors: [WOT_PROVIDER],
+    '#d': [targetPubkey],
+  })
+  if (events.length === 0) return null
+  const event = events[0]
+  const rank = event.tags.find(t => t[0] === 'rank')?.[1]
+  const followers = event.tags.find(t => t[0] === 'followers')?.[1]
+  return { score: parseInt(rank), followers: parseInt(followers) }
+}
+
+// Filter a feed by trust score
+async function filterByTrust(pubkeys, minScore = 10) {
+  const events = await pool.querySync(relays, {
+    kinds: [30382],
+    authors: [WOT_PROVIDER],
+    '#d': pubkeys,
+  })
+  const scores = new Map()
+  for (const ev of events) {
+    const pk = ev.tags.find(t => t[0] === 'd')?.[1]
+    const rank = parseInt(ev.tags.find(t => t[0] === 'rank')?.[1] || '0')
+    if (pk) scores.set(pk, rank)
+  }
+  return pubkeys.filter(pk => (scores.get(pk) || 0) >= minScore)
+}
+```
+
+Or use the HTTP API directly:
+
+```bash
+# Single score lookup
+curl https://wot.klabo.world/score?pubkey=npub1sg6plzptd64u62a878hep2kev3zah5demn5au0ge0nf6ynlvk9qs2gpzg7
+
+# Batch scoring (up to 100 pubkeys)
+curl -X POST https://wot.klabo.world/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"pubkeys":["82341f882b6eabcd...", "fa984bd7dbb282f0..."]}'
+
+# Personalized trust (is this person trustworthy FROM MY perspective?)
+curl "https://wot.klabo.world/personalized?viewer=MY_PUBKEY&target=THEIR_PUBKEY"
+```
+
 ## Built for
 
 [WoT-a-thon](https://nosfabrica.com/wotathon/) hackathon — Web of Trust tools for Nostr.

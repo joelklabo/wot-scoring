@@ -2,51 +2,78 @@
 
 ## The Problem
 
-Nostr has no built-in way to assess how trustworthy a pubkey is. Every client shows the same profile information whether someone has 50,000 followers or was created yesterday. Spam and impersonation are filtered (or not) per-client with custom heuristics that don't share data.
+Nostr has no built-in way to assess how trustworthy a pubkey is. Every client shows the same profile information whether someone has 50,000 followers or was created yesterday. Spam and impersonation are filtered per-client with custom heuristics that don't share data. NIP-85 defines a standard for trust attestations, but there are almost no implementations publishing these events today.
 
-NIP-85 defines a standard for trust attestations — three kinds of events that allow scoring services to publish machine-readable trust data. But there are almost no implementations publishing these events today.
+## What We Built
 
-## What This Tool Does
+WoT Scoring is a complete NIP-85 Trusted Assertions provider — the only known implementation that publishes all four assertion kinds:
 
-WoT Scoring implements all four NIP-85 assertion kinds:
+- **Kind 30382 — User Assertions.** PageRank trust scores computed over 51,000+ nodes and 620,000+ edges from the Nostr follow graph. Each event includes 12 metadata tags (rank, followers, posts, reactions, zaps).
+- **Kind 30383 — Event Assertions.** Per-event engagement scores (comments, reposts, reactions, zaps) for notes by top-ranked pubkeys.
+- **Kind 30384 — Addressable Event Assertions.** Engagement scoring for long-form articles (kind 30023) and live activities (kind 30311).
+- **Kind 30385 — External Identifier Assertions (NIP-73).** Scores for hashtags and URLs shared by high-WoT pubkeys, enabling trust-weighted trending topics.
 
-**Kind 30382 — User Assertions.** Crawls the Nostr follow graph (kind 3 events) from public relays, builds a directed graph, computes PageRank, and publishes per-pubkey trust scores. Each event includes 12 tags: normalized rank (0-100), follower count, post count, reply count, reactions received, zap amounts sent/received, zap counts sent/received, and the earliest known event timestamp.
+**Live service:** [wot.klabo.world](https://wot.klabo.world) — 17 API endpoints, auto re-crawls every 6 hours, publishes to 3 relays.
 
-**Kind 30383 — Event Assertions.** Crawls engagement data (comments, reposts, reactions, zaps) for individual Nostr events by top-scored pubkeys. Publishes per-event engagement scores so clients can surface high-quality content without computing engagement locally.
+## Functional Readiness
 
-**Kind 30384 — Addressable Event Assertions.** Same engagement scoring applied to long-form articles (kind 30023) and live activities (kind 30311). Enables clients to rank articles and streams by community engagement.
+The service is deployed and running in production. All 17 endpoints serve live data. 175 automated tests pass in CI. The binary is a single Go executable with one dependency (go-nostr). Docker, systemd, and bare-metal deployment are all supported. NIP-89 handler announcements are published on startup so clients can auto-discover the service.
 
-**Kind 30385 — External Identifier Assertions (NIP-73).** Crawls hashtags (from t-tags) and URLs (from r-tags) shared by high-WoT pubkeys and scores them by aggregate engagement. Publishes per-identifier scores with metrics like mention count, unique author count, reactions, reposts, comments, and zap amounts. This lets clients surface trending topics and high-quality external resources as ranked by the trust graph.
+## Depth & Innovation
 
-The result: any Nostr client can look up trust scores for pubkeys, events, articles, and external content by querying NIP-85 events from a known scoring service, without running the computation locally.
+Beyond standard PageRank scoring, we implemented:
 
-## Scale
+- **Personalized trust scoring** (`/personalized`) — scores a target pubkey relative to any viewer's follow graph, blending global PageRank (50%) with social proximity (50%). This enables per-user trust assessments without clients running their own graph computations.
+- **Composite scoring from multiple providers** — consumes kind 30382 events from external NIP-85 providers and blends them into a composite score (70% internal + 30% external average). This is true multi-provider NIP-85 interoperability.
+- **Score auditing** (`/audit`) — full transparency into why a pubkey has its score, including PageRank breakdown, engagement metrics, top followers, and external assertion details.
+- **Trust path finder** (`/graph`) — BFS shortest path between any two pubkeys through the follow graph, showing trust chains.
+- **Follow recommendations** (`/recommend`) — friends-of-friends analysis for discovery.
+- **Relay trust assessment** (`/relay`) — combines infrastructure trust data from trustedrelays.xyz with operator social reputation from PageRank.
 
-A single crawl covers ~51,000 nodes and ~620,000 edges from 3 relays in under 10 seconds. Event engagement data is crawled for the top 500 pubkeys. The service auto re-crawls every 6 hours to keep data fresh.
+## Interoperability
 
-The top-scored accounts match intuition: jack dorsey, jb55, pablo, and other well-known, well-connected Nostr users rank highest.
+- **Publishes** all four NIP-85 kinds to public relays (relay.damus.io, nos.lol, relay.primal.net)
+- **Consumes** kind 30382 assertions from external NIP-85 providers, with deduplication and freshness checks
+- **NIP-89 handler** published on startup for automatic client discovery
+- **Batch API** for clients that need to score many pubkeys at once
+- **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
+- Standard JSON responses with CORS headers for browser-based clients
 
-## Why It Matters
+Any Nostr client can query our assertions from relays using a standard REQ filter:
 
-1. **Complete NIP-85 implementation.** This is the only project we're aware of that publishes all four NIP-85 assertion kinds (30382, 30383, 30384, 30385). NIP-85 was merged as PR #1534 on January 22, 2026 — this implementation is already compliant with the full merged spec, including NIP-73 external identifier support.
+```json
+["REQ", "wot", {"kinds": [30382], "authors": ["<our-pubkey>"], "#d": ["<target-pubkey>"]}]
+```
 
-2. **Spam filtering gets better with shared trust data.** A client that checks NIP-85 attestations before rendering a note can silently deprioritize unknown/untrusted pubkeys without maintaining its own follow-graph crawler.
+## Decentralizing Ecosystem Impact
 
-3. **Content quality signals.** Kind 30383 and 30384 events let clients sort and filter notes and articles by engagement, separate from author trust. A highly-engaged post from a low-ranked author can still surface.
+NIP-85 enables a marketplace of trust providers. Instead of one centralized reputation authority, multiple independent scoring services can publish attestations using different algorithms, seed sets, and trust models. Clients choose which providers to trust.
 
-4. **WoT is composable.** Once multiple scoring services publish NIP-85 events (each with different algorithms, seed sets, or trust models), clients can aggregate across them or choose which to trust. The protocol enables a marketplace of trust providers rather than a single centralized authority.
+Our service demonstrates this by actively consuming assertions from other providers. When a second NIP-85 provider publishes kind 30382 events, our composite scoring automatically incorporates their data — no coordination required, just shared relay infrastructure.
 
-## Technical Details
+The relay trust endpoint further decentralizes infrastructure trust by combining independent data sources (trustedrelays.xyz infrastructure metrics + our social graph reputation) into a single assessment.
 
-- **Algorithm**: PageRank (20 iterations, 0.85 damping factor) over the kind-3 follow graph
-- **Engagement scoring**: Weighted formula (reactions×1 + reposts×2 + comments×3 + zap_amount), log-scale normalized to 0-100
-- **Language**: Go, single binary, only dependency is go-nostr
-- **Relays**: relay.damus.io, nos.lol, relay.primal.net
-- **CI**: GitHub Actions (go vet, go test -race, go build)
-- **Deployment**: Docker support included
+## Documentation & Openness
+
+- MIT licensed, public repository: [github.com/joelklabo/wot-scoring](https://github.com/joelklabo/wot-scoring)
+- Comprehensive README with every endpoint documented and example responses
+- CI: GitHub Actions running `go vet`, `go test -race`, and `go build` on every push
+- 175 tests covering scoring, normalization, event parsing, relay trust, and API handlers
+- This impact statement and technical architecture documented in the repository
+
+## Business Model Sustainability
+
+**Freemium API model.** The HTTP API is free for public queries at low volume. High-volume consumers (clients checking thousands of pubkeys daily) would use the batch endpoint under a paid tier. Revenue model:
+
+1. **Free tier** — public API, rate-limited, suitable for individual clients and small apps
+2. **Paid tier** — higher rate limits, SLA guarantees, priority crawl scheduling, custom seed sets for personalized scoring
+3. **NIP-85 assertion subscriptions** — relay-based delivery requires no API; clients pay relay operators, not us. Our revenue comes from the HTTP API convenience layer.
+4. **Consulting** — custom trust models, private deployments for organizations that want their own scoring instance
+
+**Cost structure:** Near-zero. Single Go binary, no database, no external API costs. Hosting is a single VPS or Cloudflare Tunnel. The only variable cost is relay bandwidth, which scales linearly and is negligible at current volumes.
+
+**Market:** Every Nostr client needs spam filtering and trust signals. As the protocol grows, the demand for shared trust infrastructure grows with it. NIP-85 is the standard; we're the reference implementation.
 
 ## Source Code
 
-https://github.com/joelklabo/wot-scoring
-
-MIT licensed.
+https://github.com/joelklabo/wot-scoring — MIT licensed.
