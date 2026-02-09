@@ -22,6 +22,8 @@ var relays = []string{
 	"wss://relay.damus.io",
 	"wss://nos.lol",
 	"wss://relay.primal.net",
+	"wss://nip85.nostr1.com",
+	"wss://nip85.brainstorm.world",
 }
 
 // Graph stores the follow relationships
