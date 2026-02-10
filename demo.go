@@ -300,6 +300,11 @@ const demoPageHTML = `<!DOCTYPE html>
   <input type="text" id="pubkeyInput" placeholder="npub1... or hex pubkey" autofocus>
   <button id="searchBtn" onclick="doSearch()">Explore</button>
 </div>
+<div style="text-align:center;margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">
+  Try: <a href="#" onclick="tryPubkey('32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245');return false;" style="color:var(--accent);">jb55</a>
+  · <a href="#" onclick="tryPubkey('3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d');return false;" style="color:var(--accent);">fiatjaf</a>
+  · <a href="#" onclick="tryPubkey('82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2');return false;" style="color:var(--accent);">jack</a>
+</div>
 <div id="status"></div>
 
 <div class="health-banner" id="healthBanner">
@@ -443,6 +448,8 @@ const dashboard = $('#dashboard');
 const btn = $('#searchBtn');
 
 input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+function tryPubkey(pk) { input.value = pk; doSearch(); }
 
 async function doSearch() {
   const raw = input.value.trim();

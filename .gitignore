@@ -1,3 +1,4 @@
 wot-scoring
+wot-scoring-*
 *.log
 *.pid

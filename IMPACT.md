@@ -154,6 +154,7 @@ The API uses the L402 protocol (HTTP 402 Payment Required) with Lightning Networ
 | `/reputation` | 5 sats | 50/day per IP |
 | `/influence` | 5 sats | 50/day per IP |
 | `/network-health` | 5 sats | 50/day per IP |
+| `/compare-providers` | 5 sats | 50/day per IP |
 | `/batch` | 10 sats | 50/day per IP |
 | `/sybil/batch` | 10 sats | 50/day per IP |
 

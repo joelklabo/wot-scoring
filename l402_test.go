@@ -40,7 +40,7 @@ func TestL402FreeTierExhaustedReturns402(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"payment_request": "lnbc10n1ptest",
-			"payment_hash":   "testhash",
+			"payment_hash":    "testhash",
 		})
 	}))
 	defer mockLNbits.Close()
@@ -255,7 +255,7 @@ func TestL402InvoiceCreationWithMockLNbits(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"payment_request": "lnbc10n1ptest",
-				"payment_hash":   "hash123",
+				"payment_hash":    "hash123",
 			})
 			return
 		}
@@ -307,14 +307,15 @@ func TestL402PricedEndpoints(t *testing.T) {
 
 	// Verify pricing
 	expected := map[string]int64{
-		"/score":        1,
-		"/audit":        5,
-		"/batch":        10,
-		"/personalized": 2,
-		"/similar":      2,
-		"/recommend":    2,
-		"/compare":      2,
-		"/decay":        1,
+		"/score":             1,
+		"/audit":             5,
+		"/batch":             10,
+		"/personalized":      2,
+		"/similar":           2,
+		"/recommend":         2,
+		"/compare":           2,
+		"/compare-providers": 5,
+		"/decay":             1,
 	}
 
 	for path, price := range expected {
