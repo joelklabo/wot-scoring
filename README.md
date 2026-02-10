@@ -703,7 +703,7 @@ If the pubkey has no kind 0 profile or no NIP-05 field set, the response still i
 
 The API supports the [L402 protocol](https://docs.lightning.engineering/the-lightning-network/l402) for pay-per-query access via Lightning Network micropayments.
 
-**Free tier:** 10 requests/day per IP on priced endpoints. No payment needed.
+**Free tier:** 50 requests/day per IP on priced endpoints. No payment needed.
 
 **Priced endpoints:**
 
@@ -712,7 +712,7 @@ The API supports the [L402 protocol](https://docs.lightning.engineering/the-ligh
 | `/score`, `/decay`, `/nip05` | 1 sat |
 | `/personalized`, `/similar`, `/recommend`, `/compare`, `/nip05/reverse`, `/timeline`, `/spam`, `/blocked` | 2 sats |
 | `/weboftrust`, `/anomalies`, `/sybil`, `/predict` | 3 sats |
-| `/audit`, `/nip05/batch`, `/trust-path`, `/reputation`, `/influence`, `/network-health` | 5 sats |
+| `/audit`, `/nip05/batch`, `/trust-path`, `/reputation`, `/influence`, `/network-health`, `/compare-providers` | 5 sats |
 | `/batch`, `/spam/batch`, `/sybil/batch` | 10 sats |
 
 All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/graph`, `/event`, `/external`, `/relay`, `/metadata`, `/docs`, `/swagger`, `/openapi.json`) are free and unlimited.
@@ -728,7 +728,7 @@ All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/gra
 **Usage flow:**
 
 ```bash
-# Free tier (first 10 requests/day)
+# Free tier (first 50 requests/day)
 curl https://wot.klabo.world/score?pubkey=<hex>
 
 # After free tier: returns 402 with invoice
