@@ -76,6 +76,7 @@ const demoPageHTML = `<!DOCTYPE html>
   .search-bar button:disabled { opacity: 0.5; cursor: wait; }
   #status { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0.5rem; }
   #status.error { color: var(--red); }
+  #status.info { color: var(--yellow); background: rgba(210,153,34,0.1); border-radius: 8px; padding: 0.8rem 1rem; max-width: 600px; margin: 0.5rem auto; line-height: 1.5; }
   .dashboard {
     display: none;
     max-width: 1100px;
@@ -473,6 +474,13 @@ async function doSearch() {
     ]);
 
     if (scoreRes.error) throw new Error(scoreRes.error);
+
+    if (!scoreRes.found) {
+      status.className = 'info';
+      status.innerHTML = 'This pubkey is not in our graph yet. We currently index <strong>' + (scoreRes.graph_size || '51K').toLocaleString() + ' nodes</strong> crawled from a seed set. Not every Nostr account is covered — try a well-known npub like jb55 or fiatjaf.';
+      btn.disabled = false;
+      return;
+    }
 
     currentPubkey = raw;
     renderScore(scoreRes, influenceRes);
