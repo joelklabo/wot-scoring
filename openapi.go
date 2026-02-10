@@ -913,7 +913,7 @@ const openAPISpec = `{
         "type": "apiKey",
         "in": "header",
         "name": "X-Payment-Hash",
-        "description": "L402 Lightning payment. First 10 requests/day per IP are free. After that, the API returns HTTP 402 with a Lightning invoice. Pay the invoice and retry with the payment hash in this header."
+        "description": "L402 Lightning payment. First 50 requests/day per IP are free. After that, the API returns HTTP 402 with a Lightning invoice. Pay the invoice and retry with either the payment hash in X-Payment-Hash (preferred), ?payment_hash= query param, or Authorization: L402 <payment_hash> for client interop."
       }
     }
   }

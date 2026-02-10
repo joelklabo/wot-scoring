@@ -38,33 +38,33 @@ func NewL402Middleware(config L402Config) *L402Middleware {
 	m := &L402Middleware{
 		config: config,
 		pricedEndpoints: map[string]int64{
-			"/score":        1,
-			"/audit":        5,
-			"/batch":        10,
-			"/personalized": 2,
-			"/similar":      2,
-			"/recommend":    2,
-			"/compare":      2,
-			"/decay":        1,
-			"/nip05":         1,
-			"/nip05/batch":   5,
-			"/nip05/reverse": 2,
-			"/timeline":      2,
-			"/spam":          2,
-			"/spam/batch":    10,
-			"/weboftrust":    3,
-			"/blocked":       2,
-			"/verify":        2,
-			"/anomalies":     3,
-			"/sybil":         3,
-			"/sybil/batch":   10,
-			"/trust-path":    5,
-			"/reputation":    5,
-			"/predict":       3,
-			"/influence":          5,
-			"/influence/batch":    10,
-			"/network-health":     5,
-			"/compare-providers":  5,
+			"/score":                1,
+			"/audit":                5,
+			"/batch":                10,
+			"/personalized":         2,
+			"/similar":              2,
+			"/recommend":            2,
+			"/compare":              2,
+			"/decay":                1,
+			"/nip05":                1,
+			"/nip05/batch":          5,
+			"/nip05/reverse":        2,
+			"/timeline":             2,
+			"/spam":                 2,
+			"/spam/batch":           10,
+			"/weboftrust":           3,
+			"/blocked":              2,
+			"/verify":               2,
+			"/anomalies":            3,
+			"/sybil":                3,
+			"/sybil/batch":          10,
+			"/trust-path":           5,
+			"/reputation":           5,
+			"/predict":              3,
+			"/influence":            5,
+			"/influence/batch":      10,
+			"/network-health":       5,
+			"/compare-providers":    5,
 			"/trust-circle":         5,
 			"/trust-circle/compare": 5,
 			"/follow-quality":       5,
@@ -96,6 +96,14 @@ func (m *L402Middleware) Wrap(next http.Handler) http.Handler {
 		paymentHash := r.Header.Get("X-Payment-Hash")
 		if paymentHash == "" {
 			paymentHash = r.URL.Query().Get("payment_hash")
+		}
+		if paymentHash == "" {
+			// Interop: some L402 clients retry with `Authorization: L402 <payment_hash>`.
+			// We still document/support `X-Payment-Hash` and `?payment_hash=` as the primary mechanisms.
+			auth := strings.TrimSpace(r.Header.Get("Authorization"))
+			if strings.HasPrefix(auth, "L402 ") {
+				paymentHash = strings.TrimSpace(strings.TrimPrefix(auth, "L402 "))
+			}
 		}
 
 		if paymentHash != "" {
@@ -140,9 +148,18 @@ func (m *L402Middleware) Wrap(next http.Handler) http.Handler {
 			"payment_hash": hash,
 			"invoice":      invoice,
 			"amount_sats":  price,
-			"message":      fmt.Sprintf("Pay %d sats to access %s. Retry with X-Payment-Hash header or ?payment_hash= query param.", price, r.URL.Path),
-			"free_tier":    m.config.FreeTier,
-			"endpoint":     r.URL.Path,
+			"message":      fmt.Sprintf("Pay %d sats to access %s. Retry with X-Payment-Hash header (preferred), ?payment_hash= query param, or Authorization: L402 <payment_hash>.", price, r.URL.Path),
+			"protocols": map[string]interface{}{
+				"l402": map[string]interface{}{
+					"price_sats":       price,
+					"payment_request":  invoice,
+					"payment_hash":     hash,
+					"verify_header":    "X-Payment-Hash",
+					"verify_query_arg": "payment_hash",
+				},
+			},
+			"free_tier": m.config.FreeTier,
+			"endpoint":  r.URL.Path,
 		})
 	})
 }
