@@ -360,8 +360,8 @@ func TestClientIP(t *testing.T) {
 	// No XFF
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "1.2.3.4:5678"
-	if ip := clientIP(req); ip != "1.2.3.4:5678" {
-		t.Errorf("expected 1.2.3.4:5678, got %s", ip)
+	if ip := clientIP(req); ip != "1.2.3.4" {
+		t.Errorf("expected 1.2.3.4, got %s", ip)
 	}
 
 	// With XFF
@@ -370,5 +370,99 @@ func TestClientIP(t *testing.T) {
 	req2.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
 	if ip := clientIP(req2); ip != "10.0.0.1" {
 		t.Errorf("expected 10.0.0.1, got %s", ip)
+	}
+
+	// With XFF, trim spaces
+	req3 := httptest.NewRequest("GET", "/", nil)
+	req3.RemoteAddr = "proxy:1234"
+	req3.Header.Set("X-Forwarded-For", " 10.0.0.9  , 10.0.0.2")
+	if ip := clientIP(req3); ip != "10.0.0.9" {
+		t.Errorf("expected 10.0.0.9, got %s", ip)
+	}
+
+	// X-Real-IP
+	req4 := httptest.NewRequest("GET", "/", nil)
+	req4.RemoteAddr = "proxy:1234"
+	req4.Header.Set("X-Real-IP", "10.1.2.3")
+	if ip := clientIP(req4); ip != "10.1.2.3" {
+		t.Errorf("expected 10.1.2.3, got %s", ip)
+	}
+}
+
+func TestL402InvoiceCreationFallsBackOn503(t *testing.T) {
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer primary.Close()
+
+	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/payments" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"payment_request": "lnbc10n1pfallback",
+				"payment_hash":    "hash-fallback",
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer fallback.Close()
+
+	m := NewL402Middleware(L402Config{
+		LNbitsURL:          primary.URL,
+		LNbitsFallbackURLs: []string{fallback.URL},
+		LNbitsAPIKey:       "test-key",
+		FreeTier:           0,
+	})
+	handler := m.Wrap(dummyHandler())
+
+	req := httptest.NewRequest("GET", "/score?pubkey=abc", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["invoice"] != "lnbc10n1pfallback" {
+		t.Fatalf("expected fallback invoice, got %v", body["invoice"])
+	}
+	if body["payment_hash"] != "hash-fallback" {
+		t.Fatalf("expected fallback payment_hash, got %v", body["payment_hash"])
+	}
+}
+
+func TestL402VerifyPaymentFallsBackOn503(t *testing.T) {
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer primary.Close()
+
+	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/payments/valid-hash" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"paid": true})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer fallback.Close()
+
+	m := NewL402Middleware(L402Config{
+		LNbitsURL:          primary.URL,
+		LNbitsFallbackURLs: []string{fallback.URL},
+		LNbitsAPIKey:       "test-key",
+		FreeTier:           0,
+	})
+	handler := m.Wrap(dummyHandler())
+
+	req := httptest.NewRequest("GET", "/score?pubkey=abc", nil)
+	req.Header.Set("X-Payment-Hash", "valid-hash")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
