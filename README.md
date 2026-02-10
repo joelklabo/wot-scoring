@@ -723,6 +723,8 @@ All other endpoints (`/top`, `/stats`, `/health`, `/export`, `/providers`, `/gra
 
 **OpenAPI Spec:** [https://wot.klabo.world/openapi.json](https://wot.klabo.world/openapi.json) — machine-readable OpenAPI 3.0.3 specification for automated client generation and tool integration
 
+**Pricing metadata:** [https://wot.klabo.world/pricing](https://wot.klabo.world/pricing) — L402 free tier + priced endpoints (sats)
+
 **Usage flow:**
 
 ```bash

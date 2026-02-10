@@ -854,6 +854,17 @@ const openAPISpec = `{
         }
       }
     },
+    "/pricing": {
+      "get": {
+        "tags": ["Infrastructure"],
+        "operationId": "getPricing",
+        "summary": "L402 pricing and free tier",
+        "description": "Returns current L402 paywall metadata including free tier and priced endpoints.",
+        "responses": {
+          "200": {"description": "Pricing metadata", "content": {"application/json": {}}}
+        }
+      }
+    },
     "/openapi.json": {
       "get": {
         "tags": ["Infrastructure"],

@@ -4023,8 +4023,14 @@ POST /publish — Publish NIP-85 kind 30382/30383/30384/30385 events to relays`,
 		l402 := NewL402FromEnv()
 		handler = l402.Wrap(handler)
 		log.Printf("L402 paywall enabled: %d free requests/day per IP, paid via Lightning", l402.config.FreeTier)
+		http.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
+			handlePricing(w, r, l402)
+		})
 	} else {
 		log.Printf("L402 paywall disabled (set LNBITS_URL and LNBITS_KEY to enable)")
+		http.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
+			handlePricing(w, r, nil)
+		})
 	}
 
 	log.Printf("WoT Scoring API listening on :%s", port)
