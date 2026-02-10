@@ -40,7 +40,7 @@ func TestL402FreeTierExhaustedReturns402(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"payment_request": "lnbc10n1ptest",
-			"payment_hash":   "testhash",
+			"payment_hash":    "testhash",
 		})
 	}))
 	defer mockLNbits.Close()
@@ -79,6 +79,20 @@ func TestL402FreeTierExhaustedReturns402(t *testing.T) {
 	}
 	if body["invoice"] != "lnbc10n1ptest" {
 		t.Errorf("expected invoice 'lnbc10n1ptest', got %v", body["invoice"])
+	}
+	protocols, ok := body["protocols"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected protocols object in 402 response")
+	}
+	l402, ok := protocols["l402"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected protocols.l402 object in 402 response")
+	}
+	if l402["payment_hash"] != "testhash" {
+		t.Errorf("expected protocols.l402.payment_hash 'testhash', got %v", l402["payment_hash"])
+	}
+	if l402["payment_request"] != "lnbc10n1ptest" {
+		t.Errorf("expected protocols.l402.payment_request 'lnbc10n1ptest', got %v", l402["payment_request"])
 	}
 }
 
@@ -195,6 +209,24 @@ func TestL402PaymentHashHeader(t *testing.T) {
 	}
 }
 
+func TestL402PaymentHashAuthorizationHeader(t *testing.T) {
+	m := NewL402Middleware(L402Config{
+		LNbitsURL:    "http://localhost:5000",
+		LNbitsAPIKey: "test-key",
+		FreeTier:     0,
+	})
+	handler := m.Wrap(dummyHandler())
+
+	// Request with Authorization header (LNbits not running, will fail verification)
+	req := httptest.NewRequest("GET", "/score?pubkey=abc", nil)
+	req.Header.Set("Authorization", "L402 deadbeef")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unverified payment, got %d", w.Code)
+	}
+}
+
 func TestL402VerifyPaymentWithMockLNbits(t *testing.T) {
 	// Start a mock LNbits server
 	mockLNbits := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +287,7 @@ func TestL402InvoiceCreationWithMockLNbits(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"payment_request": "lnbc10n1ptest",
-				"payment_hash":   "hash123",
+				"payment_hash":    "hash123",
 			})
 			return
 		}
