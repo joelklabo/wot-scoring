@@ -104,6 +104,15 @@ The landing page at [wot.klabo.world](https://wot.klabo.world) includes interact
 
 [nostr-wot](https://github.com/joelklabo/nostr-wot) — zero-dependency JavaScript client library with TypeScript declarations and L402 payment support. Covers all 48 endpoints.
 
+## Relay Plugin
+
+[strfry-wot](https://github.com/joelklabo/strfry-wot) — drop-in writePolicy plugin for [strfry](https://github.com/hoytech/strfry) relays. Filters events by WoT trust score. One binary, three env vars.
+
+```bash
+go install github.com/joelklabo/strfry-wot@latest
+# strfry.conf: writePolicy { plugin = "strfry-wot" }
+```
+
 ## Run
 
 ```bash

@@ -90,6 +90,7 @@ Beyond standard PageRank scoring, we implemented:
 - **WebSocket real-time updates** (`/ws/scores`) — real-time trust score change notifications via WebSocket. Nostr clients can subscribe for live updates without polling.
 - **Trust circle analysis** — `/trust-circle` and `/trust-circle/compare` enable social graph analysis of bidirectional trust relationships, powering "close friends" and community compatibility features.
 - **JavaScript client SDK** — [nostr-wot](https://github.com/joelklabo/nostr-wot) zero-dependency library with L402 payment support. Any developer can integrate WoT scoring in minutes.
+- **strfry relay plugin** — [strfry-wot](https://github.com/joelklabo/strfry-wot) drop-in writePolicy plugin for strfry relays. Filters events by WoT trust score with configurable threshold. Enables relay operators to add spam filtering without custom code.
 - **npub support** on all endpoints — accepts both hex and NIP-19 encoded keys
 - Standard JSON responses with CORS headers for browser-based clients
 
