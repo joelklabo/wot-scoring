@@ -152,6 +152,106 @@ func TestCompareProvidersWithExternals(t *testing.T) {
 	}
 }
 
+func TestCompareProvidersConsensusNonZero(t *testing.T) {
+	oldGraph := graph
+	oldStore := externalAssertions
+	graph = NewGraph()
+	externalAssertions = NewAssertionStore()
+	defer func() {
+		graph = oldGraph
+		externalAssertions = oldStore
+	}()
+
+	graph.AddFollow("aaa", "bbb")
+	graph.AddFollow("bbb", "aaa")
+	graph.AddFollow("ccc", "aaa")
+	graph.ComputePageRank(20, 0.85)
+
+	// Add one external "unranked" provider (rank 0) and one ranked provider.
+	externalAssertions.Add(&ExternalAssertion{
+		ProviderPubkey: "provider0",
+		SubjectPubkey:  "aaa",
+		Rank:           0,
+		CreatedAt:      1700000000,
+	})
+	externalAssertions.Add(&ExternalAssertion{
+		ProviderPubkey: "provider1",
+		SubjectPubkey:  "aaa",
+		Rank:           80,
+		CreatedAt:      1700000000,
+	})
+
+	req := httptest.NewRequest("GET", "/compare-providers?pubkey=aaa", nil)
+	rec := httptest.NewRecorder()
+	handleCompareProviders(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200. body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp CompareProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	if resp.Consensus == nil || resp.Consensus.ProviderCount != 3 {
+		t.Fatalf("expected consensus across 3 providers (incl 0-rank), got %#v", resp.Consensus)
+	}
+
+	if resp.ConsensusNonZero == nil {
+		t.Fatal("expected consensus_nonzero to be present")
+	}
+	if resp.ConsensusNonZero.ProviderCount != 2 {
+		t.Fatalf("provider_count (consensus_nonzero) = %d, want 2", resp.ConsensusNonZero.ProviderCount)
+	}
+	if resp.ConsensusNonZero.Min <= 0 {
+		t.Errorf("min (consensus_nonzero) = %d, want > 0", resp.ConsensusNonZero.Min)
+	}
+}
+
+func TestCompareProvidersConsensusNonZeroNilWhenOnlyOneNonZero(t *testing.T) {
+	oldGraph := graph
+	oldStore := externalAssertions
+	graph = NewGraph()
+	externalAssertions = NewAssertionStore()
+	defer func() {
+		graph = oldGraph
+		externalAssertions = oldStore
+	}()
+
+	graph.AddFollow("aaa", "bbb")
+	graph.AddFollow("bbb", "aaa")
+	graph.ComputePageRank(20, 0.85)
+
+	// One external provider, but it returns "unranked" (0). Only self is non-zero.
+	externalAssertions.Add(&ExternalAssertion{
+		ProviderPubkey: "provider0",
+		SubjectPubkey:  "aaa",
+		Rank:           0,
+		CreatedAt:      1700000000,
+	})
+
+	req := httptest.NewRequest("GET", "/compare-providers?pubkey=aaa", nil)
+	rec := httptest.NewRecorder()
+	handleCompareProviders(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200. body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp CompareProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	if resp.Consensus == nil || resp.Consensus.ProviderCount != 2 {
+		t.Fatalf("expected consensus across 2 providers, got %#v", resp.Consensus)
+	}
+	if resp.ConsensusNonZero != nil {
+		t.Fatalf("expected consensus_nonzero to be nil with only one non-zero provider, got %#v", resp.ConsensusNonZero)
+	}
+}
+
 func TestCompareProvidersConsensusStrong(t *testing.T) {
 	providers := []ProviderScore{
 		{NormalizedRank: 50},
