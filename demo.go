@@ -540,12 +540,14 @@ function renderSybil(data) {
   let html = '<div class="sybil-score" style="color:' + color + '">' + score + '</div>';
   html += '<div class="sybil-label">' + cls + '</div>';
 
-  if (data.signals) {
+  if (data.signals && data.signals.length > 0) {
     html += '<div class="sybil-signals">';
-    for (const [key, val] of Object.entries(data.signals)) {
-      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      html += '<div class="signal"><span>' + label + '</span><span>' + (typeof val === 'number' ? val.toFixed(2) : val) + '</span></div>';
-    }
+    data.signals.forEach(function(s) {
+      const label = (s.name || '').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      const pct = Math.min((s.score || 0) * 100, 100).toFixed(0);
+      const barColor = s.score >= 0.7 ? 'var(--green)' : s.score >= 0.4 ? 'var(--yellow)' : 'var(--red)';
+      html += '<div class="signal"><span>' + label + '</span><span>' + pct + '%</span></div>';
+    });
     html += '</div>';
   }
   $('#sybilContent').innerHTML = html;
