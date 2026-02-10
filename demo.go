@@ -284,6 +284,13 @@ const demoPageHTML = `<!DOCTYPE html>
   .path-arrow { color: var(--muted); }
   .path-node.mutual { border: 1px solid var(--green); }
 
+  /* Cross-provider card */
+  .prov-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; font-size: 0.8rem; margin-bottom: 0.6rem; }
+  .prov-list { display: flex; flex-direction: column; gap: 0.35rem; }
+  .prov-row { display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px; background: rgba(255,255,255,0.02); }
+  .prov-name { font-family: monospace; color: #cbd5e1; }
+  .prov-tag { font-size:0.7rem; color: var(--muted); margin-left:0.4rem; }
+
   /* Footer */
   .footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem; }
   .footer a { color: var(--accent); text-decoration: none; }
@@ -368,6 +375,13 @@ const demoPageHTML = `<!DOCTYPE html>
   <div class="card" id="recommendCard">
     <h2>Recommended Follows</h2>
     <div id="recommendContent"></div>
+  </div>
+
+  <div class="card" id="providersCard">
+    <h2>Cross-Provider (NIP-85)</h2>
+    <div id="providersContent">
+      <span style="color:var(--muted);font-size:0.8rem;">Run an Explore to compare scores across NIP-85 providers.</span>
+    </div>
   </div>
 
   <div class="card full" id="compareCard">
@@ -463,7 +477,7 @@ async function doSearch() {
     const base = window.location.origin;
     const pk = encodeURIComponent(raw);
 
-    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes, spamRes, anomalyRes, auditRes, recommendRes] = await Promise.all([
+    const [scoreRes, sybilRes, repRes, circleRes, influenceRes, qualityRes, spamRes, anomalyRes, auditRes, recommendRes, providersRes] = await Promise.all([
       fetch(base + '/score?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/sybil?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/reputation?pubkey=' + pk).then(r => r.json()),
@@ -477,7 +491,8 @@ async function doSearch() {
       fetch(base + '/spam?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/anomalies?pubkey=' + pk).then(r => r.json()),
       fetch(base + '/audit?pubkey=' + pk).then(r => r.json()),
-      fetch(base + '/recommend?pubkey=' + pk + '&limit=8').then(r => r.json())
+      fetch(base + '/recommend?pubkey=' + pk + '&limit=8').then(r => r.json()),
+      fetch(base + '/compare-providers?pubkey=' + pk).then(r => r.json())
     ]);
 
     if (scoreRes.error) throw new Error(scoreRes.error);
@@ -499,6 +514,7 @@ async function doSearch() {
     renderAnomalies(anomalyRes);
     renderAudit(auditRes);
     renderRecommend(recommendRes);
+    renderProviders(providersRes);
 
     dashboard.classList.add('visible');
     status.textContent = '';
@@ -1135,6 +1151,65 @@ function renderRecommend(data) {
   html += '</div>';
 
   $('#recommendContent').innerHTML = html;
+}
+
+function renderProviders(data) {
+  const el = $('#providersContent');
+  if (!data) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">Unavailable</span>';
+    return;
+  }
+  if (data.error || data.status === 'payment_required') {
+    el.innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">' + (data.error || data.message || 'Payment required') + '</span>';
+    return;
+  }
+
+  const provs = data.providers || [];
+  if (provs.length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:0.8rem;">No provider data.</span>';
+    return;
+  }
+
+  const fmtPk = (pk) => {
+    if (!pk) return '—';
+    if (pk === 'self') return 'self';
+    if (pk.length <= 16) return pk;
+    return pk.slice(0, 8) + '...' + pk.slice(-6);
+  };
+
+  const c = data.consensus || null;
+  const cz = data.consensus_nonzero || null;
+
+  let html = '';
+  if (c) {
+    html += '<div class="prov-metrics">';
+    html += '<div>Agreement: <span style="color:var(--accent)">' + (c.agreement || '—') + '</span></div>';
+    html += '<div>Spread: <span style="color:#cbd5e1">' + (c.spread ?? '—') + '</span></div>';
+    html += '<div>Mean: <span style="color:#cbd5e1">' + (c.mean ?? '—') + '</span></div>';
+    html += '<div>StdDev: <span style="color:#cbd5e1">' + (c.std_dev ?? '—') + '</span></div>';
+    html += '</div>';
+    if (cz) {
+      html += '<div style="font-size:0.75rem;color:var(--muted);margin:-0.2rem 0 0.6rem 0;">';
+      html += 'Non-zero consensus: ' + (cz.agreement || '—') + ' (n=' + (cz.provider_count || '—') + ')';
+      html += '</div>';
+    }
+  }
+
+  html += '<div class="prov-list">';
+  provs.forEach(p => {
+    const score = (p.normalized_rank ?? 0);
+    const ours = p.is_ours ? '<span class="prov-tag">ours</span>' : '';
+    const age = (p.age_seconds != null) ? ('<span class="prov-tag">' + Math.round(p.age_seconds/3600) + 'h</span>') : '';
+    const scoreTxt = (score === 0 && !p.is_ours) ? '<span style="color:var(--muted)">0</span>' : '<span style="color:' + scoreColor(score) + '">' + score + '</span>';
+
+    html += '<div class="prov-row">';
+    html += '<div><span class="prov-name">' + fmtPk(p.provider_pubkey) + '</span>' + ours + age + '</div>';
+    html += '<div>' + scoreTxt + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  el.innerHTML = html;
 }
 </script>
 </body>
