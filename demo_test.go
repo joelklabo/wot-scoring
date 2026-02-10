@@ -189,6 +189,24 @@ func TestDemo_HasNetworkHealth(t *testing.T) {
 	}
 }
 
+func TestDemo_HasCrossProviderComparison(t *testing.T) {
+	req := httptest.NewRequest("GET", "/demo", nil)
+	rr := httptest.NewRecorder()
+	handleDemo(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "providersCard") {
+		t.Error("expected cross-provider card")
+	}
+	if !strings.Contains(body, "/compare-providers?pubkey=") {
+		t.Error("expected compare-providers endpoint call")
+	}
+	if !strings.Contains(body, "renderProviders") {
+		t.Error("expected renderProviders function")
+	}
+}
+
 func TestDemo_HasSpamDetection(t *testing.T) {
 	req := httptest.NewRequest("GET", "/demo", nil)
 	rr := httptest.NewRecorder()

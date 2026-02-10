@@ -34,11 +34,12 @@ type ConsensusMetrics struct {
 
 // CompareProvidersResponse is the response for /compare-providers.
 type CompareProvidersResponse struct {
-	Pubkey    string            `json:"pubkey"`
-	InGraph   bool              `json:"in_graph"`
-	Providers []ProviderScore   `json:"providers"`
-	Consensus *ConsensusMetrics `json:"consensus,omitempty"`
-	GraphSize int               `json:"graph_size"`
+	Pubkey           string            `json:"pubkey"`
+	InGraph          bool              `json:"in_graph"`
+	Providers        []ProviderScore   `json:"providers"`
+	Consensus        *ConsensusMetrics `json:"consensus,omitempty"`
+	ConsensusNonZero *ConsensusMetrics `json:"consensus_nonzero,omitempty"`
+	GraphSize        int               `json:"graph_size"`
 }
 
 // handleCompareProviders returns WoT scores from multiple NIP-85 providers for a pubkey.
@@ -100,6 +101,19 @@ func handleCompareProviders(w http.ResponseWriter, r *http.Request) {
 	// Calculate consensus if we have 2+ providers
 	if len(providers) >= 2 {
 		resp.Consensus = calculateConsensus(providers)
+
+		// "0" ranks are sometimes used by providers as "no opinion/unranked".
+		// Keep the original consensus (for backwards compatibility) and also
+		// provide a non-zero-only view that's often more informative.
+		nonZero := make([]ProviderScore, 0, len(providers))
+		for _, p := range providers {
+			if p.NormalizedRank > 0 {
+				nonZero = append(nonZero, p)
+			}
+		}
+		if len(nonZero) >= 2 {
+			resp.ConsensusNonZero = calculateConsensus(nonZero)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
