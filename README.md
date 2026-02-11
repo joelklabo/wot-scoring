@@ -747,3 +747,7 @@ curl -H "X-Payment-Hash: abc123" https://wot.klabo.world/score?pubkey=<hex>
 ## License
 
 MIT
+
+## Webhook Testing
+
+This PR tests the GitHub webhook integration.
